@@ -1,6 +1,7 @@
 package com.snaphop.ical;
 
-/// One instance of an event within the reader's window.
+/// One instance of an event in a window of days
+/// ([IcalCalendar#occurrences(java.time.LocalDate, java.time.LocalDate)]).
 ///
 /// An event that does not repeat has one occurrence, if it falls in the window.
 ///

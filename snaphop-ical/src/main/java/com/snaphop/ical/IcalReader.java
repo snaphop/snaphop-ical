@@ -5,7 +5,6 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -16,10 +15,12 @@ import org.jspecify.annotations.Nullable;
 /// ```java
 /// IcalReader reader = IcalReader.builder()
 ///     .zone(ZoneId.of("America/New_York"))
-///     .window(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1))
 ///     .build();
 /// IcalCalendar calendar = reader.read(text);
+/// List<IcalOccurrence> november = calendar.occurrences(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1));
 /// ```
+///
+/// A calendar is read once and then asked for any window of days.
 ///
 /// The reader never logs. Text it cannot read is reported according to its [Mode]:
 /// as an [IcalParseException], or as a warning in [IcalCalendar#warnings()].
@@ -65,44 +66,25 @@ public sealed interface IcalReader {
   /// Like all builders, it is mutable and not thread-safe.
   final class Builder {
 
-    private ZoneId zone = ZoneOffset.UTC;
-    private @Nullable LocalDate windowStart;
-    private @Nullable LocalDate windowEnd;
+    private @Nullable ZoneId zone;
     private Mode mode = Mode.LAX;
 
     private Builder() {}
 
-    /// Sets the zone for floating times and for the window.
+    /// Sets the zone the calendar is read for. It is required: there is no
+    /// default, because a wrong zone silently moves every time.
     ///
-    /// A floating time is a date-time written without a zone, meaning the same
-    /// wall clock time wherever the reader is. The default is UTC.
+    /// The zone is used in two places:
     ///
-    /// @param zone the zone that floating times and the window are in
+    /// - the days of a window passed to [IcalCalendar#occurrences(LocalDate, LocalDate)];
+    /// - [IcalTime.Floating] times, which have no zone of their own, when they
+    ///   are ordered among other times or placed in a window. They stay floating
+    ///   in what is read.
+    ///
+    /// @param zone the zone, usually where the calendar's reader lives
     /// @return this builder
     public Builder zone(ZoneId zone) {
       this.zone = Objects.requireNonNull(zone, "zone");
-      return this;
-    }
-
-    /// Sets the dates that repeating events are expanded within.
-    ///
-    /// An occurrence is in the window when any part of it falls on or after
-    /// `start` and before `end`, in the reader's zone. Without a window,
-    /// [IcalCalendar#occurrences()] is empty.
-    ///
-    /// @param start the first day of the window
-    /// @param end the day after the last day of the window
-    /// @return this builder
-    /// @throws IllegalArgumentException if `end` is not after `start`
-    public Builder window(LocalDate start, LocalDate end) {
-      Objects.requireNonNull(start, "start");
-      Objects.requireNonNull(end, "end");
-      if (!end.isAfter(start)) {
-        throw new IllegalArgumentException(
-            "The window end must be after its start. start: " + start + ", end: " + end);
-      }
-      this.windowStart = start;
-      this.windowEnd = end;
       return this;
     }
 
@@ -118,18 +100,19 @@ public sealed interface IcalReader {
     /// Makes a reader from this configuration.
     ///
     /// @return an immutable, thread-safe reader
+    /// @throws IllegalStateException if no zone was set
     public IcalReader build() {
-      return new DefaultIcalReader(zone, windowStart, windowEnd, mode);
+      var z = zone;
+      if (z == null) {
+        throw new IllegalStateException(
+            "An IcalReader needs a zone: call zone(ZoneId) with the zone the calendar is read for.");
+      }
+      return new DefaultIcalReader(z, mode);
     }
   }
 }
 
-record DefaultIcalReader(
-    ZoneId zone,
-    @Nullable LocalDate windowStart,
-    @Nullable LocalDate windowEnd,
-    IcalReader.Mode mode)
-    implements IcalReader {
+record DefaultIcalReader(ZoneId zone, IcalReader.Mode mode) implements IcalReader {
 
   @Override
   public IcalCalendar read(CharSequence text) {

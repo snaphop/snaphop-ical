@@ -61,7 +61,7 @@ class SampleCalendarTest {
   @ParameterizedTest
   @EnumSource(Sample.class)
   void readerMatchesIcal4j(Sample sample) throws IOException, ParserException {
-    var reader = IcalReader.builder().mode(IcalReader.Mode.STRICT).build();
+    var reader = IcalReader.builder().zone(java.time.ZoneId.of("America/New_York")).mode(IcalReader.Mode.STRICT).build();
     String actual;
     try (var in = sample.open()) {
       actual = lines(reader.read(in).events().stream().map(e -> e.uid() + " " + e.summary()));

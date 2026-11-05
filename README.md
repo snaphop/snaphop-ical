@@ -30,13 +30,13 @@ snaphop-ical aims for:
 
 ```java
 IcalReader reader = IcalReader.builder()
-    .zone(ZoneId.of("America/New_York"))
-    .window(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1))
+    .zone(ZoneId.of("America/New_York")) // required
     .mode(IcalReader.Mode.LAX)
     .build();
 
 IcalCalendar calendar = reader.read(text);
-for (IcalOccurrence occurrence : calendar.occurrences()) {
+// Read once, then ask for any window of days.
+for (IcalOccurrence occurrence : calendar.occurrences(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1))) {
   IcalEvent event = occurrence.event();
   System.out.println(occurrence.start() + " " + event.summary());
 }
@@ -50,8 +50,8 @@ The public types:
 | `IcalCalendar` | One `VCALENDAR`: its events, occurrences and warnings |
 | `IcalEvent` | One `VEVENT` |
 | `IcalRecurrence` | An event's `RRULE` |
-| `IcalOccurrence` | One instance of an event within the reader's window |
-| `IcalTime` | A date, or a date-time in a zone |
+| `IcalOccurrence` | One instance of an event in a window of days |
+| `IcalTime` | A date, a date-time in a zone, or a floating date-time |
 | `IcalParseException` | Text that cannot be read |
 
 ## Design principles

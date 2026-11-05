@@ -5,8 +5,9 @@
 /// 1. [IcalReader] reads text, configured by its builder.
 /// 2. [IcalCalendar] is what was read: events, occurrences and warnings.
 /// 3. [IcalEvent] is one `VEVENT`, with its [IcalRecurrence] rule if it repeats.
-/// 4. [IcalOccurrence] is one instance of an event within the reader's window.
-/// 5. [IcalTime] is a date or a date-time, as event times are in iCalendar.
+/// 4. [IcalOccurrence] is one instance of an event in a window of days.
+/// 5. [IcalTime] is a date, a date-time in a zone, or a floating date-time, as
+///    event times are written in iCalendar.
 /// 6. [IcalParseException] reports text that cannot be read.
 @org.jspecify.annotations.NullMarked
 package com.snaphop.ical;

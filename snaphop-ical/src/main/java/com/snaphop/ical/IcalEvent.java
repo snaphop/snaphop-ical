@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 /// One `VEVENT` of a calendar.
 ///
 /// A repeating event is one event with a rule. Its instances are in
-/// [IcalCalendar#occurrences()].
+/// [IcalCalendar#occurrences(java.time.LocalDate, java.time.LocalDate)].
 ///
 /// Immutable and thread-safe.
 public sealed interface IcalEvent {
