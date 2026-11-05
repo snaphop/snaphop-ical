@@ -11,6 +11,14 @@
   <description>A small, modern iCalendar (RFC 5545) library</description>
   <url>https://github.com/snaphop/snaphop-ical</url>
 
+  <licenses>
+    <license>
+      <name>Zero-Clause BSD</name>
+      <url>https://opensource.org/license/0bsd</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
   <modules>
     <module>snaphop-ical</module>
     <module>test</module>

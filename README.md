@@ -85,3 +85,10 @@ Requires Java 25 or newer to build; the library targets Java 25.
 ```
 
 See [development.md](development.md) for how the project is built, tested and designed.
+
+## License
+
+[Zero-Clause BSD](LICENSE) (`0BSD`): use it for anything, with no conditions, not even keeping the notice.
+
+Test data copied from other projects, such as ICAL.js or libical, keeps its own license. It lives in its own directory under `test/`
+with that license and a note of where it came from, and is never part of a published jar.
