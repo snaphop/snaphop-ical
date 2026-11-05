@@ -1,0 +1,2 @@
+# iCalendar text must keep its CRLF line endings.
+*.ics -text
