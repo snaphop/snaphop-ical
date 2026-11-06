@@ -10,7 +10,7 @@
   </parent>
   <artifactId>snaphop-ical</artifactId>
   <name>snaphop-ical</name>
-  <description>Reads iCalendar (RFC 5545) text into immutable records</description>
+  <description>Reads iCalendar (RFC 5545) text into immutable records, works out repeating rules, and writes events</description>
 
   <!-- JSpecify is the only dependency, and only at compile time
        (requires static). Nothing else belongs here. -->
@@ -29,9 +29,20 @@
         <artifactId>maven-javadoc-plugin</artifactId>
         <executions>
           <execution>
+            <!-- The javadoc jar that is published, which also fails the
+                 build on anything public undocumented. -->
             <id>public-docs</id>
-            <phase>verify</phase>
-            <goals><goal>javadoc-no-fork</goal></goals>
+            <goals><goal>jar</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals><goal>jar-no-fork</goal></goals>
           </execution>
         </executions>
       </plugin>

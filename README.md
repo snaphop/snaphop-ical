@@ -18,6 +18,26 @@ them as a feed. Expect the API to change before 1.0.
 
 ## Usage
 
+Releases are published to SnapHop's Maven repository:
+
+```xml
+<repositories>
+  <repository>
+    <id>snaphop-public-release</id>
+    <url>https://maven.snaphop.com/release</url>
+    <snapshots><enabled>false</enabled></snapshots>
+  </repository>
+</repositories>
+
+<dependency>
+  <groupId>com.snaphop</groupId>
+  <artifactId>snaphop-ical</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+It has no runtime dependencies. Its module is `com.snaphop.ical`.
+
 ```java
 IcalReader reader = IcalReader.builder()
     .zone(ZoneId.of("America/New_York")) // required
