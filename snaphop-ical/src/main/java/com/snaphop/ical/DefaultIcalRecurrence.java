@@ -13,7 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.TreeSet;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
@@ -25,8 +25,10 @@ import org.jspecify.annotations.Nullable;
 final class DefaultIcalRecurrence implements IcalRecurrence {
 
   /// Steps of the rule tried in one expansion, at most, so that no rule can
-  /// keep a reader busy for long. A daily rule takes one step a day.
-  static final long MAX_STEPS = 20_000_000;
+  /// keep a reader busy for long. A daily rule takes one step a day, and an
+  /// hourly one a step an hour; a rule with a `COUNT` that has no `BYxxx`
+  /// parts skips ahead to the window without them.
+  static final long MAX_STEPS = 5_000_000;
 
   /// A `BYDAY` value: a day of the week, and which one of the month or year
   /// (0 for every one).
@@ -124,9 +126,9 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
   /// Reads a rule's text, the value of `RRULE` or `EXRULE`.
   ///
   /// `soft` hears of parts that RFC 5545 doesn't allow but that can be read
-  /// anyway (they are left out). Anything that can't be read throws
+  /// anyway: what is wrong, and what is done about it. Anything that can't be read throws
   /// [IllegalArgumentException], saying what.
-  static DefaultIcalRecurrence parse(String text, Consumer<String> soft) {
+  static DefaultIcalRecurrence parse(String text, BiConsumer<String, String> soft) {
     Frequency frequency = null;
     int interval = 1;
     Integer count = null;
@@ -183,31 +185,31 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
     }
     if (frequency == null) throw new IllegalArgumentException("The rule has no FREQ");
     if (count != null && until != null) {
-      soft.accept("The rule has both COUNT and UNTIL, which RFC 5545 does not allow; COUNT is used");
+      soft.accept("The rule has both COUNT and UNTIL, which RFC 5545 does not allow", "UNTIL is left out");
       until = null;
     }
     var f = frequency;
     if (byWeekNo.length > 0 && f != Frequency.YEARLY) {
-      soft.accept("BYWEEKNO is only for FREQ=YEARLY, so it is left out");
+      soft.accept("BYWEEKNO is only for FREQ=YEARLY", "it is left out");
       byWeekNo = new int[0];
     }
     if (byYearDay.length > 0 && (f == Frequency.DAILY || f == Frequency.WEEKLY || f == Frequency.MONTHLY)) {
-      soft.accept("BYYEARDAY is not for FREQ=" + f + ", so it is left out");
+      soft.accept("BYYEARDAY is not for FREQ=" + f, "it is left out");
       byYearDay = new int[0];
     }
     if (byMonthDay.length > 0 && f == Frequency.WEEKLY) {
-      soft.accept("BYMONTHDAY is not for FREQ=WEEKLY, so it is left out");
+      soft.accept("BYMONTHDAY is not for FREQ=WEEKLY", "it is left out");
       byMonthDay = new int[0];
     }
     boolean ordinals = byDay.stream().anyMatch(d -> d.n() != 0);
     if (ordinals && ((f != Frequency.MONTHLY && f != Frequency.YEARLY) || (f == Frequency.YEARLY && byWeekNo.length > 0))) {
-      soft.accept("BYDAY with a number (such as 1MO) is only for FREQ=MONTHLY or YEARLY without BYWEEKNO,"
-          + " so the numbers are left out");
+      soft.accept("BYDAY with a number (such as 1MO) is only for FREQ=MONTHLY, or YEARLY without BYWEEKNO",
+          "the numbers are left out");
       byDay = byDay.stream().map(d -> new WeekdayNum(0, d.day())).distinct().toList();
     }
     if (bySetPos.length > 0 && bySecond.length + byMinute.length + byHour.length + byDay.size() + byMonthDay.length
         + byYearDay.length + byWeekNo.length + byMonth.length == 0) {
-      soft.accept("BYSETPOS needs another BYxxx part, so it is left out");
+      soft.accept("BYSETPOS needs another BYxxx part", "it is left out");
       bySetPos = new int[0];
     }
     return new DefaultIcalRecurrence(f, interval, count, until, text, bySecond, byMinute, byHour, byDay,
@@ -317,8 +319,16 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       Predicate<LocalDateTime> withinUntil,
       Predicate<LocalDateTime> out) {
     var run = new Run(start, dates, to, withinUntil, out);
-    if (!run.emit(start)) return true;
-    var begin = count == null && from.isAfter(start) ? from : start;
+    // Without a COUNT, or when each period has one start, the periods
+    // before the window need not be worked out.
+    boolean skip = from.isAfter(start) && (count == null || run.onePerPeriod());
+    if (skip && count != null) {
+      run.emitted = run.startsBefore(from);
+      if (run.emitted >= count) return true;
+    } else if (!run.emit(start)) {
+      return true;
+    }
+    var begin = skip ? from : start;
     return frequency.compareTo(Frequency.DAILY) >= 0 ? run.periods(begin) : run.subDaily(begin);
   }
 
@@ -381,6 +391,49 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       this.days = days;
     }
 
+    /// Whether each period has exactly one start: the rule has no `BYxxx`
+    /// parts, and its start's day is in every month or year.
+    boolean onePerPeriod() {
+      if (bySecond.length + byMinute.length + byHour.length + byDay.size() + byMonthDay.length + byYearDay.length
+          + byWeekNo.length + byMonth.length + bySetPos.length > 0) {
+        return false;
+      }
+      return switch (frequency) {
+        case MONTHLY -> startDay.getDayOfMonth() <= 28;
+        case YEARLY -> !(startDay.getMonthValue() == 2 && startDay.getDayOfMonth() == 29);
+        default -> true;
+      };
+    }
+
+    /// How many starts there are before the period [#periods] or [#subDaily]
+    /// would begin at for `from`, when each period has one.
+    int startsBefore(LocalDateTime from) {
+      long n;
+      if (frequency.compareTo(Frequency.DAILY) >= 0) {
+        n = Math.max(0, Math.floorDiv(periodIndex(from.toLocalDate()), interval));
+      } else {
+        long step = unitSeconds() * interval;
+        long base = periodBase().toEpochSecond(ZoneOffset.UTC);
+        long dayStart = from.toLocalDate().atStartOfDay().toEpochSecond(ZoneOffset.UTC);
+        n = Math.max(0, Math.ceilDiv(dayStart - base, step));
+      }
+      return (int) Math.min(n, Integer.MAX_VALUE);
+    }
+
+    long unitSeconds() {
+      return switch (frequency) {
+        case HOURLY -> 3600;
+        case MINUTELY -> 60;
+        default -> 1;
+      };
+    }
+
+    /// The start of the first period of a rule more frequent than daily.
+    LocalDateTime periodBase() {
+      return start.truncatedTo(frequency == Frequency.HOURLY ? ChronoUnit.HOURS
+          : frequency == Frequency.MINUTELY ? ChronoUnit.MINUTES : ChronoUnit.SECONDS);
+    }
+
     /// Gives `t` to `out` unless the rule is over; false once it is.
     boolean emit(LocalDateTime t) {
       if (done) return false;
@@ -426,15 +479,8 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
     /// Hourly, minutely and secondly rules: day by day, skipping days that
     /// can't match, then each period of the day on the rule's grid.
     boolean subDaily(LocalDateTime from) {
-      long unit = switch (frequency) {
-        case HOURLY -> 3600;
-        case MINUTELY -> 60;
-        default -> 1;
-      };
-      var base = start.truncatedTo(frequency == Frequency.HOURLY ? ChronoUnit.HOURS
-          : frequency == Frequency.MINUTELY ? ChronoUnit.MINUTES : ChronoUnit.SECONDS);
-      long baseSecond = base.toEpochSecond(ZoneOffset.UTC);
-      long step = unit * interval;
+      long baseSecond = periodBase().toEpochSecond(ZoneOffset.UTC);
+      long step = unitSeconds() * interval;
       for (var day = from.toLocalDate(); !day.atStartOfDay().isAfter(to); day = day.plusDays(1)) {
         if (++steps > MAX_STEPS) return false;
         if (!matches(day)) continue;

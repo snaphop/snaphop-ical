@@ -3,6 +3,7 @@ package com.snaphop.ical.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import com.snaphop.ical.IcalCalendar;
 import com.snaphop.ical.IcalRecurrence;
 import com.snaphop.ical.IcalReader;
 import com.snaphop.ical.IcalTime;
@@ -76,6 +77,28 @@ class RecurrenceSpecTest {
     check(spec);
   }
 
+  /// The same instances, asked for in two windows split at each instance's
+  /// day: a rule worked out from part way, with its `COUNT` counted from
+  /// its start, gives what it gives from the start.
+  @ParameterizedTest
+  @MethodSource({"libical", "icaljs"})
+  void windowsSplitAnywhere(Spec spec) {
+    var calendar = calendar(spec);
+    if (!calendar.warnings().isEmpty()) return;
+    var from = date(spec.start()).minusDays(1);
+    // Just past the last instance expected, so that no rule makes too many.
+    var known = spec.instances().stream().filter(i -> !i.startsWith("*")).toList();
+    var until = known.isEmpty() ? from.plusYears(1) : date(known.getLast()).plusDays(2);
+    var whole = calendar.occurrences(from, until).stream().map(o -> basic(o.start())).toList();
+    for (var at : whole.stream().map(RecurrenceSpecTest::date).distinct().toList()) {
+      if (!at.isAfter(from)) continue;
+      var split = new ArrayList<String>();
+      for (var o : calendar.occurrences(from, at)) split.add(basic(o.start()));
+      for (var o : calendar.occurrences(at, until)) split.add(basic(o.start()));
+      assertEquals(String.join("\n", whole), String.join("\n", split), spec.where() + " split at " + at);
+    }
+  }
+
   static void check(Spec spec) {
     var expected = String.join("\n", expected(spec));
     var actual = String.join("\n", actual(spec));
@@ -107,23 +130,7 @@ class RecurrenceSpecTest {
 
   /// The instances the reader works out, as the records write them.
   static List<String> actual(Spec spec) {
-    var text = """
-        BEGIN:VCALENDAR
-        VERSION:2.0
-        PRODID:-//snaphop-ical//recurrence spec//EN
-        BEGIN:VEVENT
-        UID:spec
-        DTSTAMP:20260101T000000Z
-        DTSTART:%s
-        RRULE:%s
-        END:VEVENT
-        END:VCALENDAR
-        """.formatted(spec.start(), spec.rule());
-    var calendar = IcalReader.builder()
-        .zone(ZoneOffset.UTC)
-        .mostFrequent(IcalRecurrence.Frequency.SECONDLY)
-        .build()
-        .read(text);
+    var calendar = calendar(spec);
     if (!calendar.warnings().isEmpty()) return calendar.warnings();
     var first = date(spec.startAt() == null ? spec.start() : spec.startAt());
     var finite = count(spec.rule()) != null || spec.rule().toUpperCase(Locale.ROOT).contains("UNTIL=");
@@ -142,6 +149,27 @@ class RecurrenceSpecTest {
     int extra = prepends(spec) ? 1 : 0;
     int max = spec.noInstance() ? 1 : spec.max() != null ? spec.max() + extra : finite ? Integer.MAX_VALUE : instances.size() + extra;
     return out.size() > max ? out.subList(0, max) : out;
+  }
+
+  /// The event a record describes, read in UTC.
+  static IcalCalendar calendar(Spec spec) {
+    var text = """
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//snaphop-ical//recurrence spec//EN
+        BEGIN:VEVENT
+        UID:spec
+        DTSTAMP:20260101T000000Z
+        DTSTART:%s
+        RRULE:%s
+        END:VEVENT
+        END:VCALENDAR
+        """.formatted(spec.start(), spec.rule());
+    return IcalReader.builder()
+        .zone(ZoneOffset.UTC)
+        .mostFrequent(IcalRecurrence.Frequency.SECONDLY)
+        .build()
+        .read(text);
   }
 
   static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("uuuuMMdd");

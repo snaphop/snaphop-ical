@@ -152,7 +152,7 @@ final class Zones {
         var local = Values.dateTime(Values.withoutZ(start.value().strip()));
         onsets.add(new Onset(local.toInstant(from), from, to));
         for (var rrule : part.all("RRULE")) {
-          var rule = DefaultIcalRecurrence.parse(rrule.value(), soft -> {});
+          var rule = DefaultIcalRecurrence.parse(rrule.value(), (problem, consequence) -> {});
           var until = rule.untilOrNull();
           rule.expand(local, false, local, RULES_UNTIL,
               t -> switch (until) {
