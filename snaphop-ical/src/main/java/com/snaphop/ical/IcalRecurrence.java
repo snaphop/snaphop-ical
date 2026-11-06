@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 /// How an event repeats: an `RRULE` value such as `FREQ=WEEKLY;BYDAY=MO,WE`.
 ///
 /// Immutable and thread-safe.
-public sealed interface IcalRecurrence {
+public sealed interface IcalRecurrence permits DefaultIcalRecurrence {
 
   /// How often the rule repeats: its `FREQ`.
   ///
@@ -50,11 +50,3 @@ public sealed interface IcalRecurrence {
     YEARLY
   }
 }
-
-record DefaultIcalRecurrence(
-    IcalRecurrence.Frequency frequency,
-    int interval,
-    @Nullable Integer countOrNull,
-    @Nullable IcalTime untilOrNull,
-    String text)
-    implements IcalRecurrence {}
