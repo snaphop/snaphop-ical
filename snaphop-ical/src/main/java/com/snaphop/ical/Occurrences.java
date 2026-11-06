@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 /// What is done with an [IcalTime] when working out occurrences.
@@ -178,47 +177,11 @@ final class Occurrences {
 
   /// Gives `out` each start of `rule` for `m` that may be in the window.
   private void expand(DefaultIcalEvent m, DefaultIcalRecurrence rule, Consumer<IcalTime> out) {
-    var start = m.start();
-    var tz = m.tz();
-    LocalDateTime first = switch (start) {
-      case IcalTime.Date d -> d.date().atStartOfDay();
-      case IcalTime.Floating f -> f.dateTime();
-      case IcalTime.DateTime d -> d.dateTime().toLocalDateTime();
-    };
     // Wide enough for any zone's offset from the reader's, and the length.
     var lo = from.minusDays(2L + Math.max(0, m.length().days())).atStartOfDay().minus(m.length().time().abs());
     var hi = until.plusDays(2).atStartOfDay();
-    rule.expand(first, start instanceof IcalTime.Date, lo, hi, withinUntil(rule, start, tz), t -> {
-      if (t.isAfter(hi)) return false;
-      out.accept(switch (start) {
-        case IcalTime.Date d -> new IcalTime.Date(t.toLocalDate());
-        case IcalTime.Floating f -> new IcalTime.Floating(t);
-        case IcalTime.DateTime d -> new IcalTime.DateTime(tzOf(d, tz).at(t));
-      });
-      return true;
-    });
-  }
-
-  /// Whether a start, on the wall clock of the event's start, is at or
-  /// before the rule's `UNTIL`, in whatever form `UNTIL` is.
-  private Predicate<LocalDateTime> withinUntil(DefaultIcalRecurrence rule, IcalTime start, @Nullable Tz tz) {
-    var until = rule.untilOrNull();
-    if (until == null) return t -> true;
-    return switch (until) {
-      case IcalTime.Date u -> t -> !t.toLocalDate().isAfter(u.date());
-      case IcalTime.Floating u -> t -> !t.isAfter(u.dateTime());
-      case IcalTime.DateTime u -> {
-        var limit = u.dateTime().toInstant();
-        yield switch (start) {
-          case IcalTime.Date d -> t -> !t.toLocalDate().atStartOfDay(zone).toInstant().isAfter(limit);
-          case IcalTime.Floating f -> t -> !t.atZone(zone).toInstant().isAfter(limit);
-          case IcalTime.DateTime d -> {
-            var z = tzOf(d, tz);
-            yield t -> !z.at(t).toInstant().isAfter(limit);
-          }
-        };
-      }
-    };
+    var starts = rule.place(m.start(), m.tz(), zone, lo, hi);
+    for (var t = starts.next(); t != null; t = starts.next()) out.accept(t);
   }
 
   /// `t` in the form of `m`'s start, so that it can be matched with the

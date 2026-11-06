@@ -1,4 +1,5 @@
-/// Reads iCalendar (RFC 5545) text into immutable records.
+/// Reads iCalendar (RFC 5545) text into immutable records, works out
+/// repeating rules, and writes events as calendar text.
 ///
 /// The types, in the order a caller meets them:
 ///
@@ -10,5 +11,7 @@
 ///    event times are written in iCalendar.
 /// 6. [IcalParseException] reports text that cannot be read, and
 ///    [IcalWarning] text that lax mode read in its own way.
+/// 7. [IcalWriter] writes events, read or made with
+///    [IcalEvent#builder(String, IcalTime)], as calendar text.
 @org.jspecify.annotations.NullMarked
 package com.snaphop.ical;

@@ -5,16 +5,25 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.TreeSet;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import org.jspecify.annotations.Nullable;
 
 /// An `RRULE` (RFC 5545 section 3.3.10), read, and the starts it makes.
@@ -30,10 +39,6 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
   /// parts skips ahead to the window without them.
   static final long MAX_STEPS = 5_000_000;
 
-  /// A `BYDAY` value: a day of the week, and which one of the month or year
-  /// (0 for every one).
-  record WeekdayNum(int n, DayOfWeek day) {}
-
   private final Frequency frequency;
   private final int interval;
   private final @Nullable Integer count;
@@ -42,7 +47,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
   private final int[] bySecond;
   private final int[] byMinute;
   private final int[] byHour;
-  private final List<WeekdayNum> byDay;
+  private final List<Weekday> byDay;
   private final int[] byMonthDay;
   private final int[] byYearDay;
   private final int[] byWeekNo;
@@ -59,7 +64,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       int[] bySecond,
       int[] byMinute,
       int[] byHour,
-      List<WeekdayNum> byDay,
+      List<Weekday> byDay,
       int[] byMonthDay,
       int[] byYearDay,
       int[] byWeekNo,
@@ -104,13 +109,204 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
   }
 
   @Override
+  public List<Integer> bySecond() {
+    return list(bySecond);
+  }
+
+  @Override
+  public List<Integer> byMinute() {
+    return list(byMinute);
+  }
+
+  @Override
+  public List<Integer> byHour() {
+    return list(byHour);
+  }
+
+  @Override
+  public List<Weekday> byDay() {
+    return byDay;
+  }
+
+  @Override
+  public List<Integer> byMonthDay() {
+    return list(byMonthDay);
+  }
+
+  @Override
+  public List<Integer> byYearDay() {
+    return list(byYearDay);
+  }
+
+  @Override
+  public List<Integer> byWeekNo() {
+    return list(byWeekNo);
+  }
+
+  @Override
+  public List<Integer> byMonth() {
+    return list(byMonth);
+  }
+
+  @Override
+  public List<Integer> bySetPos() {
+    return list(bySetPos);
+  }
+
+  @Override
+  public DayOfWeek weekStart() {
+    return weekStart;
+  }
+
+  private static List<Integer> list(int[] values) {
+    return Arrays.stream(values).boxed().toList();
+  }
+
+  @Override
   public String text() {
     return text;
   }
 
   @Override
+  public Stream<IcalTime> starts(IcalTime start) {
+    var placed = place(start, null, ZoneOffset.UTC, LocalDateTime.MIN, LocalDateTime.MAX);
+    var it = new Iterator<IcalTime>() {
+      @Nullable IcalTime next = placed.next();
+
+      @Override
+      public boolean hasNext() {
+        return next != null;
+      }
+
+      @Override
+      public IcalTime next() {
+        var t = next;
+        if (t == null) throw new NoSuchElementException();
+        next = placed.next();
+        return t;
+      }
+    };
+    return StreamSupport.stream(Spliterators.spliteratorUnknownSize(it, Spliterator.ORDERED | Spliterator.NONNULL), false);
+  }
+
+  @Override
+  public @Nullable IcalTime nextOrNull(IcalTime start, IcalTime after) {
+    LocalDateTime from;
+    Predicate<IcalTime> isAfter;
+    switch (start) {
+      case IcalTime.Date d when after instanceof IcalTime.Date a -> {
+        from = a.date().atStartOfDay();
+        isAfter = t -> ((IcalTime.Date) t).date().isAfter(a.date());
+      }
+      case IcalTime.Floating f when after instanceof IcalTime.Floating a -> {
+        from = a.dateTime().truncatedTo(ChronoUnit.DAYS);
+        isAfter = t -> ((IcalTime.Floating) t).dateTime().isAfter(a.dateTime());
+      }
+      case IcalTime.DateTime d when after instanceof IcalTime.DateTime a -> {
+        // A day early, for the offsets of daylight saving time.
+        from = a.dateTime().withZoneSameInstant(d.dateTime().getZone()).toLocalDate().minusDays(1).atStartOfDay();
+        var instant = a.dateTime().toInstant();
+        isAfter = t -> ((IcalTime.DateTime) t).dateTime().toInstant().isAfter(instant);
+      }
+      default -> throw new IllegalArgumentException(
+          "The time to find a start after must be " + Writing.kind(start) + ", as the first start is, but is " + Writing.kind(after));
+    }
+    var placed = place(start, null, ZoneOffset.UTC, from, LocalDateTime.MAX);
+    for (var t = placed.next(); t != null; t = placed.next()) {
+      if (isAfter.test(t)) return t;
+    }
+    return null;
+  }
+
+  @Override
+  public @Nullable String describeOrNull(IcalTime start) {
+    return Words.describeOrNull(this, start);
+  }
+
+  /// The starts of the rule from `start`, placed in its zone (`tz`, else the
+  /// zone of a date-time `start`). `zone` places a date or floating time
+  /// to compare with an `UNTIL` in UTC. Starts before `from` may be left out,
+  /// and none is after `to`.
+  Placed place(IcalTime start, @Nullable Tz tz, ZoneId zone, LocalDateTime from, LocalDateTime to) {
+    LocalDateTime first = switch (start) {
+      case IcalTime.Date d -> d.date().atStartOfDay();
+      case IcalTime.Floating f -> f.dateTime();
+      case IcalTime.DateTime d -> d.dateTime().toLocalDateTime();
+    };
+    var z = start instanceof IcalTime.DateTime d ? (tz != null ? tz : new JdkTz(d.dateTime().getZone())) : null;
+    return new Placed(start, z, run(first, start instanceof IcalTime.Date, from, to, withinUntil(start, z, zone)));
+  }
+
+  /// Starts placed in the form, and zone, of the first.
+  static final class Placed {
+    private final IcalTime start;
+    private final @Nullable Tz tz;
+    private final Run run;
+
+    Placed(IcalTime start, @Nullable Tz tz, Run run) {
+      this.start = start;
+      this.tz = tz;
+      this.run = run;
+    }
+
+    /// The next start, or null once the rule is over.
+    @Nullable IcalTime next() {
+      var t = run.next();
+      if (t == null) return null;
+      return switch (start) {
+        case IcalTime.Date d -> new IcalTime.Date(t.toLocalDate());
+        case IcalTime.Floating f -> new IcalTime.Floating(t);
+        case IcalTime.DateTime d -> new IcalTime.DateTime(Objects.requireNonNull(tz).at(t));
+      };
+    }
+
+    /// Whether the rule stopped because it took [#MAX_STEPS].
+    boolean exhausted() {
+      return run.exhausted;
+    }
+  }
+
+  /// Whether a start, on the wall clock of the first, is at or before the
+  /// rule's `UNTIL`, in whatever form `UNTIL` is.
+  private Predicate<LocalDateTime> withinUntil(IcalTime start, @Nullable Tz tz, ZoneId zone) {
+    var u = until;
+    if (u == null) return t -> true;
+    return switch (u) {
+      case IcalTime.Date d -> t -> !t.toLocalDate().isAfter(d.date());
+      case IcalTime.Floating f -> t -> !t.isAfter(f.dateTime());
+      case IcalTime.DateTime d -> {
+        var limit = d.dateTime().toInstant();
+        if (tz == null) yield t -> !(start instanceof IcalTime.Date ? t.toLocalDate().atStartOfDay(zone) : t.atZone(zone)).toInstant().isAfter(limit);
+        yield t -> !tz.at(t).toInstant().isAfter(limit);
+      }
+    };
+  }
+
+  /// Reads a rule as [IcalRecurrence#parse(String)] does: anything RFC 5545
+  /// doesn't allow throws.
+  static DefaultIcalRecurrence parseStrictly(String rule) {
+    var text = rule.strip();
+    if (text.regionMatches(true, 0, "RRULE:", 0, 6)) text = text.substring(6);
+    var quoted = Problems.quote(text);
+    try {
+      return parse(text, (problem, consequence) -> {
+        throw new IcalParseException(problem + ": " + quoted, 0);
+      });
+    } catch (IllegalArgumentException e) {
+      throw new IcalParseException(e.getMessage() + ": " + quoted, 0);
+    }
+  }
+
+  @Override
   public String toString() {
     return "IcalRecurrence[" + text + "]";
+  }
+
+  /// The same rule ending at `until`, which must be the same end in another
+  /// form; its text is as written.
+  DefaultIcalRecurrence withUntil(IcalTime until) {
+    return new DefaultIcalRecurrence(frequency, interval, count, until, text, bySecond, byMinute, byHour, byDay,
+        byMonthDay, byYearDay, byWeekNo, byMonth, bySetPos, weekStart);
   }
 
   /// How often the rule really makes starts: `FREQ=HOURLY;BYMINUTE=0,30` is
@@ -136,7 +332,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
     int[] bySecond = {};
     int[] byMinute = {};
     int[] byHour = {};
-    List<WeekdayNum> byDay = List.of();
+    List<Weekday> byDay = List.of();
     int[] byMonthDay = {};
     int[] byYearDay = {};
     int[] byWeekNo = {};
@@ -205,7 +401,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
     if (ordinals && ((f != Frequency.MONTHLY && f != Frequency.YEARLY) || (f == Frequency.YEARLY && byWeekNo.length > 0))) {
       soft.accept("BYDAY with a number (such as 1MO) is only for FREQ=MONTHLY, or YEARLY without BYWEEKNO",
           "the numbers are left out");
-      byDay = byDay.stream().map(d -> new WeekdayNum(0, d.day())).distinct().toList();
+      byDay = byDay.stream().map(d -> new Weekday(0, d.day())).distinct().toList();
     }
     if (bySetPos.length > 0 && bySecond.length + byMinute.length + byHour.length + byDay.size() + byMonthDay.length
         + byYearDay.length + byWeekNo.length + byMonth.length == 0) {
@@ -263,13 +459,19 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
     return Arrays.stream(out).distinct().sorted().toArray();
   }
 
-  private static List<WeekdayNum> weekdays(String value) {
-    var out = new ArrayList<WeekdayNum>();
+  private static List<Weekday> weekdays(String value) {
+    var out = new ArrayList<Weekday>();
     for (var raw : value.split(",", -1)) {
       var p = raw.strip().toUpperCase(Locale.ROOT);
       if (p.isEmpty()) continue;
       if (p.length() < 2) throw new IllegalArgumentException("BYDAY=" + value + " has " + Problems.quote(raw) + ", which is not a day");
-      var day = weekday(p.substring(p.length() - 2));
+      DayOfWeek day;
+      try {
+        day = weekday(p.substring(p.length() - 2));
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("BYDAY=" + value + " has " + Problems.quote(raw.strip())
+            + ", which is not a day (MO, TU, WE, TH, FR, SA or SU)");
+      }
       var num = p.substring(0, p.length() - 2);
       int n = 0;
       if (!num.isEmpty()) {
@@ -282,7 +484,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
           throw new IllegalArgumentException("BYDAY=" + value + " has " + Problems.quote(raw) + ", whose number is not from 1 to 53, or -53 to -1");
         }
       }
-      var d = new WeekdayNum(n, day);
+      var d = new Weekday(n, day);
       if (!out.contains(d)) out.add(d);
     }
     if (out.isEmpty()) throw new IllegalArgumentException("BYDAY= has no days");
@@ -318,53 +520,63 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       LocalDateTime to,
       Predicate<LocalDateTime> withinUntil,
       Predicate<LocalDateTime> out) {
-    var run = new Run(start, dates, to, withinUntil, out);
-    // Without a COUNT, or when each period has one start, the periods
-    // before the window need not be worked out.
-    boolean skip = from.isAfter(start) && (count == null || run.onePerPeriod());
-    if (skip && count != null) {
-      run.emitted = run.startsBefore(from);
-      if (run.emitted >= count) return true;
-    } else if (!run.emit(start)) {
-      return true;
+    var run = run(start, dates, from, to, withinUntil);
+    for (var t = run.next(); t != null; t = run.next()) {
+      if (!out.test(t)) return true;
     }
-    var begin = skip ? from : start;
-    return frequency.compareTo(Frequency.DAILY) >= 0 ? run.periods(begin) : run.subDaily(begin);
+    return !run.exhausted;
+  }
+
+  /// The starts of the rule, one at a time, as [#expand] gives them.
+  Run run(LocalDateTime start, boolean dates, LocalDateTime from, LocalDateTime to, Predicate<LocalDateTime> withinUntil) {
+    return new Run(start, dates, from, to, withinUntil);
   }
 
   /// One expansion: what depends on the start, and how far it has got.
-  private final class Run {
+  final class Run {
     final LocalDateTime start;
     final LocalDate startDay;
-    final boolean dates;
     final LocalDateTime to;
     final Predicate<LocalDateTime> withinUntil;
-    final Predicate<LocalDateTime> out;
+    final List<LocalTime> times;
     final int[] hours;
     final int[] minutes;
     final int[] seconds;
     final int[] months;
     final int[] monthDays;
-    final List<WeekdayNum> days;
+    final List<Weekday> days;
+    /// Starts worked out and not yet given.
+    final ArrayDeque<LocalDateTime> ready = new ArrayDeque<>();
+    /// The next period, for a rule daily or less often.
+    long period;
+    /// The next day, for a rule more often than daily.
+    LocalDate day;
+    /// The last day a start was given on, or that the run began on: a rule
+    /// that makes no start in the 400 years of the Gregorian calendar's
+    /// cycle (times its interval) after it never will.
+    LocalDate quietSince;
+    /// Whether the next start given is `start`, which `UNTIL` can't end.
+    boolean first;
     int emitted;
     long steps;
-    boolean done;
+    boolean ended;
+    /// Whether it ended because it took [#MAX_STEPS].
+    boolean exhausted;
 
-    Run(LocalDateTime start, boolean dates, LocalDateTime to, Predicate<LocalDateTime> withinUntil, Predicate<LocalDateTime> out) {
+    Run(LocalDateTime start, boolean dates, LocalDateTime from, LocalDateTime to, Predicate<LocalDateTime> withinUntil) {
       this.start = start;
       this.startDay = start.toLocalDate();
-      this.dates = dates;
       this.to = to;
       this.withinUntil = withinUntil;
-      this.out = out;
       hours = byHour.length > 0 ? byHour : new int[] {start.getHour()};
       minutes = byMinute.length > 0 ? byMinute : new int[] {start.getMinute()};
       seconds = bySecond.length > 0 ? bySecond : new int[] {start.getSecond()};
+      times = dates ? List.of(LocalTime.MIDNIGHT) : times(hours, minutes, seconds);
       // RFC 5545's defaults, from the start, for a rule with no day parts.
       boolean dayParts = byWeekNo.length + byYearDay.length + byMonthDay.length + byDay.size() > 0;
       int[] months = byMonth;
       int[] monthDays = byMonthDay;
-      List<WeekdayNum> days = byDay;
+      List<Weekday> days = byDay;
       if (frequency == Frequency.YEARLY && byWeekNo.length == 0 && byYearDay.length == 0) {
         // A yearly day of the month is in the start's month, as libical and
         // ICAL.js read it.
@@ -373,7 +585,7 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       if (frequency == Frequency.YEARLY && byWeekNo.length > 0 && byDay.isEmpty() && byMonthDay.length == 0
           && byYearDay.length == 0) {
         // A week number alone is the start's day of the week in it.
-        days = List.of(new WeekdayNum(0, startDay.getDayOfWeek()));
+        days = List.of(new Weekday(0, startDay.getDayOfWeek()));
       }
       if (!dayParts) {
         switch (frequency) {
@@ -382,13 +594,67 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
             monthDays = new int[] {startDay.getDayOfMonth()};
           }
           case MONTHLY -> monthDays = new int[] {startDay.getDayOfMonth()};
-          case WEEKLY -> days = List.of(new WeekdayNum(0, startDay.getDayOfWeek()));
+          case WEEKLY -> days = List.of(new Weekday(0, startDay.getDayOfWeek()));
           default -> {}
         }
       }
       this.months = months;
       this.monthDays = monthDays;
       this.days = days;
+
+      // Without a COUNT, or when each period has one start, the periods
+      // before `from` need not be worked out.
+      boolean skip = from.isAfter(start) && (count == null || onePerPeriod());
+      if (skip && count != null) {
+        emitted = startsBefore(from);
+        if (emitted >= count) ended = true;
+      } else if (!skip) {
+        ready.add(start);
+        first = true;
+      }
+      var begin = skip ? from : start;
+      quietSince = begin.toLocalDate();
+      period = Math.max(0, Math.floorDiv(periodIndex(begin.toLocalDate()), interval) * (long) interval);
+      day = begin.toLocalDate();
+    }
+
+    /// The next start, or null once the rule is over.
+    @Nullable LocalDateTime next() {
+      while (ready.isEmpty()) {
+        if (ended) return null;
+        if (++steps > MAX_STEPS) {
+          exhausted = true;
+          ended = true;
+          return null;
+        }
+        if (frequency.compareTo(Frequency.DAILY) >= 0) period();
+        else day();
+      }
+      var t = ready.poll();
+      if (t.isAfter(to) || (!first && !withinUntil.test(t))) {
+        end();
+        return null;
+      }
+      first = false;
+      emitted++;
+      if (count != null && emitted >= count) end();
+      quietSince = t.toLocalDate();
+      return t;
+    }
+
+    private void end() {
+      ended = true;
+      ready.clear();
+    }
+
+    /// Whether `d` is past where the rule could still make a start.
+    private boolean pastAll(LocalDate d) {
+      if (d.atStartOfDay().isAfter(to)) return true;
+      try {
+        return d.isAfter(quietSince.plusYears(400L * interval));
+      } catch (DateTimeException e) {
+        return false;
+      }
     }
 
     /// Whether each period has exactly one start: the rule has no `BYxxx`
@@ -405,8 +671,8 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
       };
     }
 
-    /// How many starts there are before the period [#periods] or [#subDaily]
-    /// would begin at for `from`, when each period has one.
+    /// How many starts there are before the period the run begins at for
+    /// `from`, when each period has one.
     int startsBefore(LocalDateTime from) {
       long n;
       if (frequency.compareTo(Frequency.DAILY) >= 0) {
@@ -434,73 +700,64 @@ final class DefaultIcalRecurrence implements IcalRecurrence {
           : frequency == Frequency.MINUTELY ? ChronoUnit.MINUTES : ChronoUnit.SECONDS);
     }
 
-    /// Gives `t` to `out` unless the rule is over; false once it is.
-    boolean emit(LocalDateTime t) {
-      if (done) return false;
-      if (emitted > 0 && !withinUntil.test(t)) {
-        done = true;
-        return false;
-      }
-      emitted++;
-      if (!out.test(t) || (count != null && emitted >= count)) {
-        done = true;
-        return false;
-      }
-      return true;
-    }
-
     /// The starts of one period, in order, with `BYSETPOS` applied.
-    boolean emitAll(List<LocalDateTime> candidates) {
+    private void add(List<LocalDateTime> candidates) {
       var chosen = bySetPos.length == 0 ? candidates : setPos(candidates);
       for (var c : chosen) {
-        if (!c.isAfter(start)) continue;
-        if (!emit(c)) return false;
-      }
-      return true;
-    }
-
-    /// Yearly, monthly, weekly and daily rules: one period at a time.
-    boolean periods(LocalDateTime from) {
-      long p = Math.max(0, Math.floorDiv(periodIndex(from.toLocalDate()), interval) * (long) interval);
-      var times = dates ? List.of(LocalTime.MIDNIGHT) : times(hours, minutes, seconds);
-      for (; ; p += interval) {
-        if (++steps > MAX_STEPS) return false;
-        var period = periodDays(p);
-        if (period == null || period.getFirst().atStartOfDay().isAfter(to)) return true;
-        var candidates = new ArrayList<LocalDateTime>();
-        for (var d : period) {
-          if (!matches(d)) continue;
-          for (var t : times) candidates.add(d.atTime(t));
-        }
-        if (!emitAll(candidates)) return true;
+        if (c.isAfter(start)) ready.add(c);
       }
     }
 
-    /// Hourly, minutely and secondly rules: day by day, skipping days that
-    /// can't match, then each period of the day on the rule's grid.
-    boolean subDaily(LocalDateTime from) {
+    /// Yearly, monthly, weekly and daily rules: the next period.
+    private void period() {
+      var days = periodDays(period);
+      if (days == null || pastAll(days.getFirst())) {
+        ended = true;
+        return;
+      }
+      period += interval;
+      var candidates = new ArrayList<LocalDateTime>();
+      for (var d : days) {
+        if (!matches(d)) continue;
+        for (var t : times) candidates.add(d.atTime(t));
+      }
+      add(candidates);
+    }
+
+    /// Hourly, minutely and secondly rules: the next day, skipped if it
+    /// can't match, else each period of it on the rule's grid.
+    private void day() {
+      if (pastAll(day)) {
+        ended = true;
+        return;
+      }
+      var d = day;
+      day = day.plusDays(1);
+      if (!matches(d)) return;
       long baseSecond = periodBase().toEpochSecond(ZoneOffset.UTC);
       long step = unitSeconds() * interval;
-      for (var day = from.toLocalDate(); !day.atStartOfDay().isAfter(to); day = day.plusDays(1)) {
-        if (++steps > MAX_STEPS) return false;
-        if (!matches(day)) continue;
-        long dayStart = day.atStartOfDay().toEpochSecond(ZoneOffset.UTC);
-        long first = Math.max(0, Math.ceilDiv(dayStart - baseSecond, step)) * step + baseSecond;
-        for (long s = first; s < dayStart + 86400; s += step) {
-          if (++steps > MAX_STEPS) return false;
-          var period = LocalDateTime.ofEpochSecond(s, 0, ZoneOffset.UTC);
-          if (period.isAfter(to)) return true;
-          if (!limited(byHour, period.getHour())) continue;
-          if (frequency != Frequency.HOURLY && !limited(byMinute, period.getMinute())) continue;
-          if (frequency == Frequency.SECONDLY && !limited(bySecond, period.getSecond())) continue;
-          int[] ms = frequency == Frequency.HOURLY ? minutes : new int[] {period.getMinute()};
-          int[] ss = frequency == Frequency.SECONDLY ? new int[] {period.getSecond()} : seconds;
-          var candidates = new ArrayList<LocalDateTime>();
-          for (var t : times(new int[] {period.getHour()}, ms, ss)) candidates.add(day.atTime(t));
-          if (!emitAll(candidates)) return true;
+      long dayStart = d.atStartOfDay().toEpochSecond(ZoneOffset.UTC);
+      long firstSecond = Math.max(0, Math.ceilDiv(dayStart - baseSecond, step)) * step + baseSecond;
+      for (long s = firstSecond; s < dayStart + 86400; s += step) {
+        if (++steps > MAX_STEPS) {
+          exhausted = true;
+          ended = true;
+          return;
         }
+        var p = LocalDateTime.ofEpochSecond(s, 0, ZoneOffset.UTC);
+        if (p.isAfter(to)) {
+          ended = true;
+          return;
+        }
+        if (!limited(byHour, p.getHour())) continue;
+        if (frequency != Frequency.HOURLY && !limited(byMinute, p.getMinute())) continue;
+        if (frequency == Frequency.SECONDLY && !limited(bySecond, p.getSecond())) continue;
+        int[] ms = frequency == Frequency.HOURLY ? minutes : new int[] {p.getMinute()};
+        int[] ss = frequency == Frequency.SECONDLY ? new int[] {p.getSecond()} : seconds;
+        var candidates = new ArrayList<LocalDateTime>();
+        for (var t : times(new int[] {p.getHour()}, ms, ss)) candidates.add(d.atTime(t));
+        add(candidates);
       }
-      return true;
     }
 
     /// The period number of a day: 0 for the period the start is in. A

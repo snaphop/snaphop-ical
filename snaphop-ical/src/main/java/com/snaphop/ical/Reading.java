@@ -125,7 +125,7 @@ final class Reading {
         var e = time(endProp, endProp.value()).time();
         var exact = exact(start.time(), e, start.tz());
         if (exact == null) {
-          problems.report(endProp.line(), "DTEND is " + kind(e) + " but DTSTART is " + kind(start.time()),
+          problems.report(endProp.line(), "DTEND is " + Writing.kind(e) + " but DTSTART is " + Writing.kind(start.time()),
               "DTEND is left out", Problems.quote(endProp.text()));
         } else if (exact.negative()) {
           problems.report(endProp.line(), "DTEND is before DTSTART", "DTEND is left out", Problems.quote(endProp.text()));
@@ -264,9 +264,15 @@ final class Reading {
         case IcalTime.DateTime t -> until instanceof IcalTime.DateTime;
       };
       if (!ok) {
-        problems.strictly(p.line(), "UNTIL must be " + (start instanceof IcalTime.DateTime ? "in UTC" : kind(start))
-            + " as DTSTART is " + kind(start) + ": " + Problems.quote(p.text()));
+        problems.strictly(p.line(), "UNTIL must be " + (start instanceof IcalTime.DateTime ? "in UTC" : Writing.kind(start))
+            + " as DTSTART is " + Writing.kind(start) + ": " + Problems.quote(p.text()));
       }
+    }
+    if (until instanceof IcalTime.DateTime u && !(start instanceof IcalTime.DateTime)) {
+      // A date or floating start's UNTIL in UTC, as Google writes one, is
+      // where the reader's zone puts it: kept so, in the start's form.
+      var local = u.dateTime().withZoneSameInstant(reader.zone());
+      rule = rule.withUntil(start instanceof IcalTime.Date ? new IcalTime.Date(local.toLocalDate()) : new IcalTime.Floating(local.toLocalDateTime()));
     }
     return rule;
   }
@@ -359,14 +365,6 @@ final class Reading {
             tz == null ? e.dateTime().atZone(s.dateTime().getZone()) : tz.at(e.dateTime())));
         case IcalTime.Date e -> null;
       };
-    };
-  }
-
-  private static String kind(IcalTime t) {
-    return switch (t) {
-      case IcalTime.Date d -> "a date";
-      case IcalTime.DateTime d -> "a date-time";
-      case IcalTime.Floating f -> "a floating date-time";
     };
   }
 

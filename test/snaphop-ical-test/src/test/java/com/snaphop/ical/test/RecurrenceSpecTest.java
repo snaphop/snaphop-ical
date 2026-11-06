@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -97,6 +98,48 @@ class RecurrenceSpecTest {
       for (var o : calendar.occurrences(from, at)) split.add(basic(o.start()));
       for (var o : calendar.occurrences(at, until)) split.add(basic(o.start()));
       assertEquals(String.join("\n", whole), String.join("\n", split), spec.where() + " split at " + at);
+    }
+  }
+
+  /// A window after a finite rule's last instance has none of it, though
+  /// the rule is worked out from part way.
+  @ParameterizedTest
+  @MethodSource({"libical", "icaljs"})
+  void nothingAfterTheEnd(Spec spec) {
+    var calendar = calendar(spec);
+    var finite = count(spec.rule()) != null || spec.rule().toUpperCase(Locale.ROOT).contains("UNTIL=");
+    if (!calendar.warnings().isEmpty() || !finite || spec.startAt() != null) return;
+    var all = actual(spec);
+    var after = date(all.getLast()).plusDays(1);
+    assertEquals(List.of(), calendar.occurrences(after, after.plusYears(5)).stream().map(o -> basic(o.start())).toList(),
+        spec.where() + " " + spec.comment());
+  }
+
+  /// The same instances from the rule alone, with no calendar:
+  /// [IcalRecurrence#starts(IcalTime)] gives what the reader gives, and
+  /// [IcalRecurrence#nextOrNull(IcalTime, IcalTime)] after each gives the
+  /// next, and after a finite rule's last, none.
+  @ParameterizedTest
+  @MethodSource({"libical", "icaljs"})
+  void theRuleAlone(Spec spec) {
+    var calendar = calendar(spec);
+    if (!calendar.warnings().isEmpty()) return;
+    var event = calendar.events().getFirst();
+    var rule = Objects.requireNonNull(event.recurrenceOrNull());
+    var start = event.start();
+    var reader = actual(spec);
+    var finite = count(spec.rule()) != null || spec.rule().toUpperCase(Locale.ROOT).contains("UNTIL=");
+    var all = rule.starts(start).filter(t -> spec.startAt() == null || basic(t).compareTo(spec.startAt()) >= 0);
+    var starts = (finite ? all : all.limit(reader.size())).toList();
+    assertEquals(String.join("\n", reader), String.join("\n", starts.stream().map(RecurrenceSpecTest::basic).limit(reader.size()).toList()),
+        spec.where() + " " + spec.comment());
+    if (finite && reader.size() < starts.size()) return;
+    for (int i = 0; i < starts.size(); i++) {
+      if (i > 20 && i < starts.size() - 5) continue;
+      var next = rule.nextOrNull(start, starts.get(i));
+      var expected = i + 1 < starts.size() ? basic(starts.get(i + 1)) : null;
+      if (expected == null && !finite) continue;
+      assertEquals(expected, next == null ? null : basic(next), spec.where() + " after " + basic(starts.get(i)));
     }
   }
 
