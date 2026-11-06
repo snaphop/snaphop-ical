@@ -7,6 +7,7 @@ import com.snaphop.ical.IcalCalendar;
 import com.snaphop.ical.IcalRecurrence;
 import com.snaphop.ical.IcalReader;
 import com.snaphop.ical.IcalTime;
+import com.snaphop.ical.IcalWarning;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -131,7 +132,7 @@ class RecurrenceSpecTest {
   /// The instances the reader works out, as the records write them.
   static List<String> actual(Spec spec) {
     var calendar = calendar(spec);
-    if (!calendar.warnings().isEmpty()) return calendar.warnings();
+    if (!calendar.warnings().isEmpty()) return calendar.warnings().stream().map(IcalWarning::message).toList();
     var first = date(spec.startAt() == null ? spec.start() : spec.startAt());
     var finite = count(spec.rule()) != null || spec.rule().toUpperCase(Locale.ROOT).contains("UNTIL=");
     // A record whose INSTANCES is libical's error has none to go by.

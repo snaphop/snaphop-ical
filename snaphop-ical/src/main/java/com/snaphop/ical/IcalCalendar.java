@@ -2,6 +2,7 @@ package com.snaphop.ical;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /// A calendar read by an [IcalReader]: one `VCALENDAR`.
@@ -43,14 +44,16 @@ public sealed interface IcalCalendar {
   /// @throws IllegalArgumentException if `until` is not after `from`
   List<IcalOccurrence> occurrences(LocalDate from, LocalDate until);
 
-  /// What [IcalReader.Mode#LAX] skipped or read in its own way, one message
-  /// each, starting with its line number.
+  /// What [IcalReader.Mode#LAX] skipped or read in its own way, in the order
+  /// found.
   ///
-  /// @return the warnings, always empty in [IcalReader.Mode#STRICT]
-  List<String> warnings();
+  /// @return the warnings, always empty in [IcalReader.Mode#STRICT], and when
+  ///         they were handed to a consumer as they were found
+  ///         ([IcalReader#read(CharSequence, Consumer)])
+  List<IcalWarning> warnings();
 }
 
-record DefaultIcalCalendar(@Nullable String nameOrNull, List<IcalEvent> events, List<String> warnings, DefaultIcalReader reader)
+record DefaultIcalCalendar(@Nullable String nameOrNull, List<IcalEvent> events, List<IcalWarning> warnings, DefaultIcalReader reader)
     implements IcalCalendar {
 
   DefaultIcalCalendar {

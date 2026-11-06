@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /// A property as written, after its lines are unfolded: its name upper-cased,
@@ -48,36 +49,32 @@ record Comp(String name, int line, List<Prop> props, List<Comp> comps) {
 }
 
 /// What a read found wrong. In strict mode the first problem is thrown; in lax
-/// mode each is kept as a warning and reading goes on.
+/// mode each goes to `warnings` and reading goes on.
 final class Problems {
 
   private final IcalReader.Mode mode;
-  private final List<String> warnings = new ArrayList<>();
+  private final Consumer<? super IcalWarning> warnings;
 
-  Problems(IcalReader.Mode mode) {
+  Problems(IcalReader.Mode mode, Consumer<? super IcalWarning> warnings) {
     this.mode = mode;
+    this.warnings = warnings;
   }
 
   boolean strict() {
     return mode == IcalReader.Mode.STRICT;
   }
 
-  /// Reports a problem the same way in either mode.
-  void report(int line, String message) {
-    var text = at(line, message);
-    if (strict()) throw new IcalParseException(text, line);
-    warnings.add(text);
+  /// Reports a problem only strict mode cares about: text that breaks RFC
+  /// 5545 but reads as well without what it is missing.
+  void strictly(int line, String message) {
+    if (strict()) throw new IcalParseException(at(line, message), line);
   }
 
   /// Reports `problem`, then `where` it is (quoted text, or which event). A
   /// lax warning also says what was done about it: its `consequence`.
   void report(int line, String problem, String consequence, String where) {
     if (strict()) throw new IcalParseException(at(line, problem + ": " + where), line);
-    warnings.add(at(line, problem + ", so " + consequence + ": " + where));
-  }
-
-  List<String> warnings() {
-    return List.copyOf(warnings);
+    warnings.accept(new IcalWarning(line, problem, consequence, where));
   }
 
   static String at(int line, String message) {
@@ -156,7 +153,8 @@ final class ContentLines {
     }
     while (!open.isEmpty()) {
       var unclosed = open.getLast();
-      problems.report(unclosed.line, "BEGIN:" + unclosed.name + " has no END:" + unclosed.name + " before the text ends.");
+      problems.report(unclosed.line, "BEGIN:" + unclosed.name + " has no END:" + unclosed.name + " before the text ends",
+          "it ends there", Problems.quote("BEGIN:" + unclosed.name));
       close(open, top);
     }
     return top;
@@ -215,7 +213,7 @@ final class ContentLines {
         current = null;
       }
       if (end == start) {
-        if (problems.strict() && i < n) problems.report(physical, "A blank line, which RFC 5545 does not allow.");
+        if (i < n) problems.strictly(physical, "A blank line, which RFC 5545 does not allow.");
         continue;
       }
       current = new StringBuilder().append(text, start, end);

@@ -28,8 +28,12 @@ for (IcalOccurrence o : calendar.occurrences(LocalDate.of(2026, 11, 1), LocalDat
   // An id that stays the same each time the calendar is read: piano-1@2026-11-02T22:00:00Z
   String id = o.id();
 }
-calendar.warnings().forEach(System.out::println); // what lax mode left out, and where
+// What lax mode left out, and where: Line 8: DTEND is before DTSTART, so DTEND is left out: "DTEND:20261102T080000"
+for (IcalWarning w : calendar.warnings()) System.out.println(w.message());
 ```
+
+A warning is a record of its line, problem, consequence and where it is. To handle each as it
+is found and keep none, pass a consumer: `reader.read(text, w -> System.out.println(w.message()))`.
 
 The public types:
 
@@ -42,6 +46,7 @@ The public types:
 | `IcalOccurrence` | One instance of an event in a window of days, with a lasting id and its days and times in the reader's zone |
 | `IcalTime` | A date, a date-time in a zone, or a floating date-time |
 | `IcalParseException` | Text that cannot be read |
+| `IcalWarning` | Text that lax mode read in its own way: the line, the problem and what was done |
 
 ## What it reads
 
@@ -112,7 +117,8 @@ A calendar parser has no business logging. Problems are reported to the caller, 
 what matters:
 
 - In strict mode, text that breaks RFC 5545 throws an `IcalParseException`.
-- In lax mode, what was skipped is listed in `IcalCalendar.warnings()`.
+- In lax mode, what was skipped is an `IcalWarning`, kept in `IcalCalendar.warnings()` or
+  handed to a consumer given to `read`.
 
 If something ever must be logged, it will use `System.Logger` from the JDK, never SLF4J or
 another logging library.

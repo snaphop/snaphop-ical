@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /// Reads calendar text into a [DefaultIcalCalendar]: the events of its
@@ -20,16 +21,23 @@ final class Reading {
   private Zones zones = new Zones(List.of());
   private final Set<String> unknownZones = new HashSet<>();
 
-  private Reading(DefaultIcalReader reader) {
+  private Reading(DefaultIcalReader reader, Consumer<? super IcalWarning> warnings) {
     this.reader = reader;
-    this.problems = new Problems(reader.mode());
+    this.problems = new Problems(reader.mode(), warnings);
   }
 
+  /// Reads `text`, keeping its warnings in the calendar.
   static DefaultIcalCalendar read(CharSequence text, DefaultIcalReader reader) {
-    return new Reading(reader).calendar(text);
+    var warnings = new ArrayList<IcalWarning>();
+    return new Reading(reader, warnings::add).calendar(text, warnings);
   }
 
-  private DefaultIcalCalendar calendar(CharSequence text) {
+  /// Reads `text`, handing its warnings to `warnings` as they are found.
+  static DefaultIcalCalendar read(CharSequence text, DefaultIcalReader reader, Consumer<? super IcalWarning> warnings) {
+    return new Reading(reader, warnings).calendar(text, List.of());
+  }
+
+  private DefaultIcalCalendar calendar(CharSequence text, List<IcalWarning> warnings) {
     var calendars = ContentLines.read(text, problems);
     if (calendars.isEmpty()) {
       // Not reached: the text starts a VCALENDAR, which ContentLines ends
@@ -44,12 +52,12 @@ final class Reading {
     if (problems.strict()) {
       var version = calendar.first("VERSION");
       if (version == null) {
-        problems.report(calendar.line(), "The VCALENDAR has no VERSION, which RFC 5545 requires.");
+        problems.strictly(calendar.line(), "The VCALENDAR has no VERSION, which RFC 5545 requires.");
       } else if (!version.value().strip().equals("2.0")) {
-        problems.report(version.line(), "VERSION is not 2.0, so this is not RFC 5545 iCalendar: " + Problems.quote(version.text()));
+        problems.strictly(version.line(), "VERSION is not 2.0, so this is not RFC 5545 iCalendar: " + Problems.quote(version.text()));
       }
       if (calendar.first("PRODID") == null) {
-        problems.report(calendar.line(), "The VCALENDAR has no PRODID, which RFC 5545 requires.");
+        problems.strictly(calendar.line(), "The VCALENDAR has no PRODID, which RFC 5545 requires.");
       }
     }
     var name = text(calendar, "X-WR-CALNAME");
@@ -76,7 +84,7 @@ final class Reading {
         events.add(e);
       }
     }
-    return new DefaultIcalCalendar(name.isBlank() ? null : name.strip(), events, problems.warnings(), reader);
+    return new DefaultIcalCalendar(name.isBlank() ? null : name.strip(), events, warnings, reader);
   }
 
   /// A `VEVENT`, or null if it is left out.
@@ -87,8 +95,8 @@ final class Reading {
       problems.report(c.line(), "An event has no UID", "it is left out", where);
       return null;
     }
-    if (problems.strict() && c.first("DTSTAMP") == null) {
-      problems.report(c.line(), "An event has no DTSTAMP, which RFC 5545 requires: " + where);
+    if (c.first("DTSTAMP") == null) {
+      problems.strictly(c.line(), "An event has no DTSTAMP, which RFC 5545 requires: " + where);
     }
     var startProp = one(c, "DTSTART");
     if (startProp == null) {
@@ -166,7 +174,7 @@ final class Reading {
     }
     var exceptionRules = new ArrayList<DefaultIcalRecurrence>();
     for (var p : c.all("EXRULE")) {
-      if (problems.strict()) problems.report(p.line(), "EXRULE was taken out of iCalendar by RFC 5545: " + Problems.quote(p.text()));
+      problems.strictly(p.line(), "EXRULE was taken out of iCalendar by RFC 5545: " + Problems.quote(p.text()));
       var rule = rule(p, start.time(), where);
       if (rule == null) return null;
       exceptionRules.add(rule);
@@ -256,7 +264,7 @@ final class Reading {
         case IcalTime.DateTime t -> until instanceof IcalTime.DateTime;
       };
       if (!ok) {
-        problems.report(p.line(), "UNTIL must be " + (start instanceof IcalTime.DateTime ? "in UTC" : kind(start))
+        problems.strictly(p.line(), "UNTIL must be " + (start instanceof IcalTime.DateTime ? "in UTC" : kind(start))
             + " as DTSTART is " + kind(start) + ": " + Problems.quote(p.text()));
       }
     }
