@@ -8,51 +8,92 @@ need is to read events and expand repeating ones.
 
 ## Status
 
-Early. The project structure and a sketch of the public API exist; reading does not yet.
-Expect the API to change before 1.0.
+Experimental: the first release will be 0.1.0. It reads events and expands
+repeating ones well enough to replace ical4j in
+[agentic-todo](https://github.com/agentgt/agentic-todo), which reads the
+calendar feeds a family subscribes to. Expect the API to change before 1.0.
 
-## Why
-
-ical4j works, but:
-
-- Its API is from the 2000s: mutable objects everywhere and many public classes.
-- It pulls in dependencies: `java.xml`, commons-lang3, commons-codec, threeten-extra and SLF4J.
-- It logs.
-
-snaphop-ical aims for:
-
-- One module, `com.snaphop.ical`, with one package of the same name.
-- No runtime dependencies. [JSpecify](https://jspecify.dev) annotations are used at compile time only.
-- Immutable, thread-safe results built on `java.time`.
-- A small public API.
-
-## Usage (planned)
+## Usage
 
 ```java
 IcalReader reader = IcalReader.builder()
     .zone(ZoneId.of("America/New_York")) // required
-    .mode(IcalReader.Mode.LAX)
     .build();
 
 IcalCalendar calendar = reader.read(text);
 // Read once, then ask for any window of days.
-for (IcalOccurrence occurrence : calendar.occurrences(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1))) {
-  IcalEvent event = occurrence.event();
-  System.out.println(occurrence.start() + " " + event.summary());
+for (IcalOccurrence o : calendar.occurrences(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 1))) {
+  // What a calendar draws, in the reader's zone.
+  System.out.println(o.startDay() + " " + (o.allDay() ? "all day" : o.startTimeOrNull()) + " " + o.event().summary());
+  // An id that stays the same each time the calendar is read: piano-1@2026-11-02T22:00:00Z
+  String id = o.id();
 }
+calendar.warnings().forEach(System.out::println); // what lax mode left out, and where
 ```
 
 The public types:
 
 | Type | What it is |
 |------|------------|
-| `IcalReader` | Reads text; configured by `IcalReader.builder()` |
-| `IcalCalendar` | One `VCALENDAR`: its events, occurrences and warnings |
+| `IcalReader` | Reads text; configured by `IcalReader.builder()`: a zone, a `Mode`, whether to include cancelled times, how often an event may repeat |
+| `IcalCalendar` | One `VCALENDAR`: its name, events, occurrences and warnings |
 | `IcalEvent` | One `VEVENT` |
 | `IcalRecurrence` | An event's `RRULE` |
-| `IcalOccurrence` | One instance of an event in a window of days |
+| `IcalOccurrence` | One instance of an event in a window of days, with a lasting id and its days and times in the reader's zone |
 | `IcalTime` | A date, a date-time in a zone, or a floating date-time |
 | `IcalParseException` | Text that cannot be read |
+
+## What it reads
+
+- **Content lines** (RFC 5545 section 3.1): folded lines, quoted parameters,
+  RFC 6868 escapes, line endings of CRLF, LF or CR, a byte order mark.
+- **Events**: `UID`, `SUMMARY`, `DESCRIPTION`, `LOCATION`, `STATUS`, `DTSTART`,
+  `DTEND` or `DURATION`, `RRULE` (every part), `RDATE` (periods too), `EXDATE`,
+  `EXRULE`, and `RECURRENCE-ID` events that change one instance: moved,
+  changed or cancelled, into or out of the window.
+- **Time zones**, never from the network: a zone name the JDK knows (after a
+  prefix such as `/mozilla.org/.../`); a `VTIMEZONE` in the calendar, as the
+  JDK zone it agrees with from 2020 to 2037, else by its own rules; a Windows
+  zone name, as Outlook and Exchange write them. Times that a change to
+  daylight saving time skips or repeats are placed as RFC 5545 says.
+- **The calendar's name**: `X-WR-CALNAME`, or `NAME` (RFC 7986).
+
+Not yet:
+
+- Writing calendars.
+- `VTODO`, `VJOURNAL`, `VFREEBUSY` and `VALARM`, which are skipped, and
+  properties events have beyond those above (`ATTENDEE`, `ORGANIZER` and so on).
+- `RECURRENCE-ID;RANGE=THISANDFUTURE`, read as changing one instance, with a
+  warning; a rule with `RSCALE` other than `GREGORIAN` (RFC 7529), whose event is
+  left out with a warning.
+
+### Limits on work
+
+A calendar is often someone else's text. An event that repeats more often than
+`mostFrequent` (hourly by default) is refused, counting what its parts make it:
+`FREQ=HOURLY;BYMINUTE=0,30` is every half hour. Working out one rule for one
+window stops after 5 million steps (a daily rule takes a step a day); rules with
+no `COUNT`, and those with a `COUNT` and no `BYxxx` parts, skip ahead to the window.
+How much text to read is the caller's to limit.
+
+## How it is tested
+
+End to end, through the public reader, in the `test` module:
+
+- **Specifications from other projects**, in [`test/corpus`](test/corpus):
+  libical's 157 recurrence records and the 136 cases of ICAL.js's
+  recurrence iterator tests, each read as the event it describes. All
+  but two agree; those two are listed in the test with why.
+- **Oracles**: each sample is also read by [ical4j](https://github.com/ical4j/ical4j)
+  and by [ICAL.js](https://github.com/kewisch/ical.js) (run on GraalJS), and
+  their events and occurrences compared with ours. Where one differs, the
+  test says why; each time so far it is the oracle that departs from RFC 5545
+  or fails to read the text.
+- **Samples** of feeds as Apple, Google, Exchange and a sports app write them,
+  with daylight saving changes, moved times and the window's edges, each
+  compared in full with what a calendar should show.
+- **Problems** in full: the message strict mode throws and the warnings lax
+  mode gives, for each kind of broken text.
 
 ## Design principles
 
