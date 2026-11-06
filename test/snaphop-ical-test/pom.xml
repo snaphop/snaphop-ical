@@ -10,7 +10,7 @@
   </parent>
   <artifactId>snaphop-ical-test</artifactId>
   <name>snaphop-ical-test</name>
-  <description>End to end tests, with ical4j as the oracle</description>
+  <description>End to end tests, with ical4j and ICAL.js as oracles</description>
 
   <dependencies>
     <dependency>
@@ -30,5 +30,39 @@
       <artifactId>ical4j</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <!-- The second oracle: ICAL.js, run on GraalJS. -->
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>ical.js</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.graalvm.polyglot</groupId>
+      <artifactId>polyglot</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.graalvm.polyglot</groupId>
+      <artifactId>js-community</artifactId>
+      <type>pom</type>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Without Graal's compiler, GraalJS interprets, which is fast
+               enough here; it needn't say so. -->
+          <argLine>-Dpolyglot.engine.WarnInterpreterOnly=false --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</argLine>
+          <systemPropertyVariables>
+            <icaljs.version>${icaljs.version}</icaljs.version>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

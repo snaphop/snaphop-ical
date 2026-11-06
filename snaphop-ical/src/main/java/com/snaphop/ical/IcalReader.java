@@ -61,6 +61,17 @@ public sealed interface IcalReader {
     LAX
   }
 
+  /// Whether [IcalCalendar#occurrences(LocalDate, LocalDate)] gives
+  /// cancelled events and times.
+  enum Cancelled {
+    /// Left out: a cancelled event, or a cancelled time of a repeating event
+    /// (`STATUS:CANCELLED` on its `RECURRENCE-ID` event), is not given. A
+    /// calendar shows them this way, so this is the default.
+    OMIT,
+    /// Given like the others; check [IcalEvent#cancelled()].
+    INCLUDE
+  }
+
   /// Configures an [IcalReader].
   ///
   /// Like all builders, it is mutable and not thread-safe.
@@ -68,6 +79,8 @@ public sealed interface IcalReader {
 
     private @Nullable ZoneId zone;
     private Mode mode = Mode.LAX;
+    private Cancelled cancelled = Cancelled.OMIT;
+    private IcalRecurrence.Frequency mostFrequent = IcalRecurrence.Frequency.HOURLY;
 
     private Builder() {}
 
@@ -97,6 +110,33 @@ public sealed interface IcalReader {
       return this;
     }
 
+    /// Sets whether occurrences include cancelled events and times. The
+    /// default is [Cancelled#OMIT].
+    ///
+    /// @param cancelled whether to leave them out
+    /// @return this builder
+    public Builder cancelled(Cancelled cancelled) {
+      this.cancelled = Objects.requireNonNull(cancelled, "cancelled");
+      return this;
+    }
+
+    /// Sets how often an event may repeat. The default is
+    /// [IcalRecurrence.Frequency#HOURLY].
+    ///
+    /// Calendar text often comes from elsewhere, and a rule such as
+    /// `FREQ=MINUTELY` makes half a million occurrences in a year. An event
+    /// that repeats more often is an error in [Mode#STRICT], and is left out
+    /// with a warning in [Mode#LAX]. A rule counts as repeating as often as
+    /// its parts make it: `FREQ=HOURLY;BYMINUTE=0,30` is every half hour,
+    /// so [IcalRecurrence.Frequency#MINUTELY].
+    ///
+    /// @param frequency the most frequent repeating allowed
+    /// @return this builder
+    public Builder mostFrequent(IcalRecurrence.Frequency frequency) {
+      this.mostFrequent = Objects.requireNonNull(frequency, "frequency");
+      return this;
+    }
+
     /// Makes a reader from this configuration.
     ///
     /// @return an immutable, thread-safe reader
@@ -107,16 +147,17 @@ public sealed interface IcalReader {
         throw new IllegalStateException(
             "An IcalReader needs a zone: call zone(ZoneId) with the zone the calendar is read for.");
       }
-      return new DefaultIcalReader(z, mode);
+      return new DefaultIcalReader(z, mode, cancelled, mostFrequent);
     }
   }
 }
 
-record DefaultIcalReader(ZoneId zone, IcalReader.Mode mode) implements IcalReader {
+record DefaultIcalReader(ZoneId zone, IcalReader.Mode mode, IcalReader.Cancelled cancelled, IcalRecurrence.Frequency mostFrequent)
+    implements IcalReader {
 
   @Override
   public IcalCalendar read(CharSequence text) {
-    throw new UnsupportedOperationException("Reading is not implemented yet.");
+    return Reading.read(text, this);
   }
 
   @Override

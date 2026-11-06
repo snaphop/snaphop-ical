@@ -99,6 +99,12 @@ public sealed interface IcalEvent {
   }
 }
 
+/// An `RDATE` value: a start, and an end if it was written as a period.
+record RDate(IcalTime start, @Nullable IcalTime end) {}
+
+/// An event, and what working out its occurrences needs: the zone of its
+/// start, its length (exact from `DTEND`, nominal from `DURATION`), its rules,
+/// and the line of its `BEGIN:VEVENT`.
 record DefaultIcalEvent(
     String uid,
     String summary,
@@ -107,12 +113,30 @@ record DefaultIcalEvent(
     IcalTime start,
     IcalTime end,
     IcalEvent.Status status,
-    @Nullable IcalRecurrence recurrenceOrNull,
     List<IcalTime> exceptionDates,
-    @Nullable IcalTime recurrenceIdOrNull)
+    @Nullable IcalTime recurrenceIdOrNull,
+    @Nullable Tz tz,
+    Length length,
+    List<DefaultIcalRecurrence> rules,
+    List<DefaultIcalRecurrence> exceptionRules,
+    List<RDate> rdates,
+    int line)
     implements IcalEvent {
 
   DefaultIcalEvent {
     exceptionDates = List.copyOf(exceptionDates);
+    rules = List.copyOf(rules);
+    exceptionRules = List.copyOf(exceptionRules);
+    rdates = List.copyOf(rdates);
+  }
+
+  @Override
+  public @Nullable IcalRecurrence recurrenceOrNull() {
+    return rules.isEmpty() ? null : rules.getFirst();
+  }
+
+  /// Whether it has more than one instance by rule or `RDATE`.
+  boolean repeats() {
+    return !rules.isEmpty() || !rdates.isEmpty();
   }
 }
