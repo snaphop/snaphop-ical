@@ -1,6 +1,7 @@
 # Test corpora from other projects
 
-Test data copied from other iCalendar implementations. Each directory keeps
+Test data copied from other iCalendar implementations, and the ICAL.js code
+the tests run as an oracle. Each directory keeps
 its project's license and an `UPSTREAM.md` saying where its files came from
 and what was changed. None of it is part of a published jar: only the test
 module reads it.

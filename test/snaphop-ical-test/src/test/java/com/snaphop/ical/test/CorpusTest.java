@@ -33,10 +33,9 @@ class CorpusTest {
       + " as ICAL.js does; ical4j ends it a day later";
   static final String ICAL4J_PARSER = "ical4j fails to read the file; this reader reads it, with warnings for what it skips";
   static final String NO_UID = "an event with no UID, which this reader leaves out with a warning";
-  static final String EMPTY_VTIMEZONE = "a VTIMEZONE with no TZID, which this reader skips and the oracle fails on";
-  static final String DATE_EXDATE = "EXDATE;VALUE=DATE:20240611 for an event at 03:00 UTC: this reader leaves out the"
-      + " instance on June 11 in UTC, as ICAL.js's own test (recur_expansion_test.js) at the corpus's commit expects;"
-      + " ical4j and ICAL.js 2.1.0, the oracle, leave out none";
+  static final String EMPTY_VTIMEZONE = "a VTIMEZONE with no TZID, which this reader and ICAL.js skip and ical4j fails on";
+  static final String DATE_EXDATE = "EXDATE;VALUE=DATE:20240611 for an event at 03:00 UTC: this reader and ICAL.js leave"
+      + " out the instance on June 11 in UTC; ical4j leaves out none";
 
   static final Map<String, String> ICALJS_EVENTS = Map.of(
       "samples/timezone_from_file.ics", NO_UID,
@@ -57,11 +56,7 @@ class CorpusTest {
 
   static final Map<String, String> ICALJS_OCCURRENCES = Map.of(
       "samples/multiple_rrules.ics", "ICAL.js ends the second RRULE a week early: 2012-07-29 is a Sunday before its UNTIL,"
-          + " and ical4j agrees it is an instance",
-      "samples/recur_duplicate_dates.ics", "ICAL.js gives an instance twice when its RRULE and RDATE both make it;"
-          + " a recurrence set has each once, as ical4j agrees",
-      "samples/recur_instances.ics", EMPTY_VTIMEZONE,
-      "samples/rdate_exdate.ics", DATE_EXDATE);
+          + " and ical4j agrees it is an instance");
 
   static final Map<String, String> ICAL4J_OCCURRENCES = Map.ofEntries(
       Map.entry("samples/blank_line_mid.ics", "ical4j fails on a blank line, which this reader skips"),

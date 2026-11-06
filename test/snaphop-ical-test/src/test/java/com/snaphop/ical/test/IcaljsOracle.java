@@ -3,6 +3,7 @@ package com.snaphop.ical.test;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,6 +18,8 @@ import java.util.regex.Pattern;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.FileSystem;
+import org.graalvm.polyglot.io.IOAccess;
 
 /// ICAL.js as an oracle, run on GraalJS: occurrences as Mozilla's calendar
 /// code works them out (`icaljs-oracle.js`).
@@ -94,10 +97,14 @@ final class IcaljsOracle {
     return zoneArray;
   }
 
+  /// ICAL.js's own modules, at the commit the corpus's tests come from.
+  static final Path LIB = RecurrenceSpecTest.CORPUS.resolve("icaljs/lib").toAbsolutePath().normalize();
+
   private static void start() {
-    context = Context.newBuilder("js").option("engine.WarnInterpreterOnly", "false").build();
-    var version = Objects.requireNonNull(System.getProperty("icaljs.version"), "icaljs.version, set by the pom");
-    context.eval(Source.create("js", resource("/META-INF/resources/webjars/ical.js/" + version + "/dist/ical.es5.cjs")));
+    var files = IOAccess.newBuilder().fileSystem(FileSystem.newReadOnlyFileSystem(FileSystem.newDefaultFileSystem())).build();
+    context = Context.newBuilder("js").option("engine.WarnInterpreterOnly", "false").allowIO(files).build();
+    var start = "import ICAL from \"" + LIB.resolve("module.js").toUri() + "\"; globalThis.ICAL = ICAL;";
+    context.eval(Source.newBuilder("js", start, "start.mjs").mimeType("application/javascript+module").buildLiteral());
     oracle = context.eval(Source.create("js", resource("icaljs-oracle.js")));
   }
 
