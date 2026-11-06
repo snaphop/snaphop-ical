@@ -1,17 +1,20 @@
 # snaphop-ical
 
-A small, modern Java library for reading iCalendar ([RFC 5545](https://www.rfc-editor.org/rfc/rfc5545))
-text: the `.ics` files and feeds that calendar apps share.
+A small, modern Java library for iCalendar ([RFC 5545](https://www.rfc-editor.org/rfc/rfc5545)):
+the `.ics` files and feeds that calendar apps share. It reads events and works out repeating
+ones, works out repeating rules on their own (as a todo app repeats tasks), and writes events
+as a calendar others can subscribe to.
 
-It is meant as a lighter replacement for [ical4j](https://github.com/ical4j/ical4j) when all you
-need is to read events and expand repeating ones.
+It is meant as a lighter replacement for [ical4j](https://github.com/ical4j/ical4j) when that is
+all you need.
 
 ## Status
 
 Experimental: the first release will be 0.1.0. It reads events and expands
 repeating ones well enough to replace ical4j in
 [agentic-todo](https://github.com/agentgt/agentic-todo), which reads the
-calendar feeds a family subscribes to. Expect the API to change before 1.0.
+calendar feeds a family subscribes to, and will repeat tasks and publish
+them as a feed. Expect the API to change before 1.0.
 
 ## Usage
 
@@ -35,18 +38,43 @@ for (IcalWarning w : calendar.warnings()) System.out.println(w.message());
 A warning is a record of its line, problem, consequence and where it is. To handle each as it
 is found and keep none, pass a consumer: `reader.read(text, w -> System.out.println(w.message()))`.
 
+A rule on its own, as a todo app repeats a task:
+
+```java
+var rule = IcalRecurrence.parse("FREQ=WEEKLY;BYDAY=TU,FR"); // or IcalRecurrence.builder(Frequency.WEEKLY)...
+var start = new IcalTime.Date(LocalDate.of(2026, 11, 3));
+rule.starts(start).limit(5).toList();                       // the next five: a lazy stream
+rule.nextOrNull(start, new IcalTime.Date(LocalDate.now())); // when it is due next
+rule.describeOrNull(start);                                 // "Every week on Tuesday and Friday"
+```
+
+Writing a calendar:
+
+```java
+String text = IcalWriter.builder()
+    .prodId("-//SnapHop//Agentic Todo//EN")
+    .name("Gent family")
+    .refreshInterval(Duration.ofHours(1))
+    .build()
+    .write(List.of(IcalEvent.builder("trash@todo.example.com", start)
+        .summary("Take out the trash")
+        .recurrence(rule)
+        .build()));
+```
+
 The public types:
 
 | Type | What it is |
 |------|------------|
 | `IcalReader` | Reads text; configured by `IcalReader.builder()`: a zone, a `Mode`, whether to include cancelled times, how often an event may repeat |
 | `IcalCalendar` | One `VCALENDAR`: its name, events, occurrences and warnings |
-| `IcalEvent` | One `VEVENT` |
-| `IcalRecurrence` | An event's `RRULE` |
+| `IcalEvent` | One `VEVENT`, read or made with `IcalEvent.builder(uid, start)` |
+| `IcalRecurrence` | An `RRULE`, read with `parse` or made with `builder`: its parts, its starts from a first start, the next after a time, and the rule in words |
 | `IcalOccurrence` | One instance of an event in a window of days, with a lasting id and its days and times in the reader's zone |
 | `IcalTime` | A date, a date-time in a zone, or a floating date-time |
 | `IcalParseException` | Text that cannot be read |
 | `IcalWarning` | Text that lax mode read in its own way: the line, the problem and what was done |
+| `IcalWriter` | Writes events as a calendar; configured by `IcalWriter.builder()`: a product id, a name, a refresh interval, a stamp |
 
 ## What it reads
 
@@ -63,9 +91,25 @@ The public types:
   daylight saving time skips or repeats are placed as RFC 5545 says.
 - **The calendar's name**: `X-WR-CALNAME`, or `NAME` (RFC 7986).
 
+## What it writes
+
+- **Events**: the same properties, and a `DTSTAMP`. A date-time in a zone has
+  its `TZID` and a `VTIMEZONE` made from the JDK's rules, from a year before
+  the zone's first use: each change of offset until the zone's yearly rules
+  take over, then those as yearly `RRULE`s, each checked to make the JDK's
+  changes until 2200. A rule's `UNTIL` is written in the form RFC 5545
+  requires for the event's start.
+- **The calendar's name** as `NAME` and `X-WR-CALNAME`, and how often to fetch
+  it again as `REFRESH-INTERVAL` and `X-PUBLISHED-TTL`.
+- **Text** escaped, without control characters, in lines folded at 75 octets of
+  UTF-8 between characters, with CRLF.
+
+What it writes it reads back in strict mode as the same events, with the same
+occurrences. An `EXRULE` is not written: RFC 5545 took it out of iCalendar.
+
 Not yet:
 
-- Writing calendars.
+- Writing anything but events, or properties beyond those above.
 - `VTODO`, `VJOURNAL`, `VFREEBUSY` and `VALARM`, which are skipped, and
   properties events have beyond those above (`ATTENDEE`, `ORGANIZER` and so on).
 - `RECURRENCE-ID;RANGE=THISANDFUTURE`, read as changing one instance, with a
@@ -79,6 +123,8 @@ A calendar is often someone else's text. An event that repeats more often than
 `FREQ=HOURLY;BYMINUTE=0,30` is every half hour. Working out one rule for one
 window stops after 5 million steps (a daily rule takes a step a day); rules with
 no `COUNT`, and those with a `COUNT` and no `BYxxx` parts, skip ahead to the window.
+A rule that makes no start in 400 years (times its interval), the Gregorian calendar's cycle,
+never will, so it is looked at no further: `FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30` ends there.
 How much text to read is the caller's to limit.
 
 ## How it is tested
@@ -99,6 +145,13 @@ End to end, through the public reader, in the `test` module:
   compared in full with what a calendar should show.
 - **Problems** in full: the message strict mode throws and the warnings lax
   mode gives, for each kind of broken text.
+- **Rules alone**: each recurrence record again through `IcalRecurrence.starts`
+  and `nextOrNull`; rules in words, made from parts, and wrong, in full.
+- **Writing**: a family's calendar compared in full, then read back in strict
+  mode, by ical4j and by ICAL.js; each JDK zone's `VTIMEZONE` read back under
+  another name, noon each day from 2025 to 2030 checked against the JDK; and
+  every calendar above read, written and read again, with the same events and
+  occurrences.
 
 ## Design principles
 

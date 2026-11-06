@@ -46,7 +46,7 @@ record JdkTz(ZoneId zone) implements Tz {
 
 /// A `VTIMEZONE` that is no JDK zone: its times get fixed offsets, each the
 /// one its rules give at that time.
-record RulesTz(ZoneRules rules) implements Tz {
+record RulesTz(String tzid, ZoneRules rules) implements Tz {
 
   @Override
   public ZonedDateTime at(LocalDateTime local) {
@@ -107,7 +107,7 @@ final class Zones {
       var rules = rules(vtz);
       if (rules != null) {
         var match = match(rules.rules(), Math.max(MATCH_FROM, rules.firstYear()), WINDOWS.get(tzid));
-        return match != null ? new JdkTz(match) : new RulesTz(rules.rules());
+        return match != null ? new JdkTz(match) : new RulesTz(tzid, rules.rules());
       }
     }
     var windows = WINDOWS.get(tzid);
