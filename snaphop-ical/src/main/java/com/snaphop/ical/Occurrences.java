@@ -108,10 +108,10 @@ final class Occurrences {
         changed.add(Times.key(sameForm(c.recurrenceIdOrNull(), m)));
       }
       for (var i : instances(m)) {
-        var key = Times.key(i.start());
+        var key = Times.key(i.recurrenceId());
         if (changed.contains(key)) continue;
         var end = i.end() == null ? Times.plus(i.start(), m.length(), m.tz()) : i.end();
-        add(m, m.repeats() ? m.uid() + "@" + key : m.uid(), i.start(), end, i.start());
+        add(m, m.repeats() ? m.uid() + "@" + key : m.uid(), i.start(), end, i.recurrenceId());
       }
     }
     for (var list : changes.values()) {
@@ -141,19 +141,23 @@ final class Occurrences {
     out.add(new DefaultIcalOccurrence(event, id, start, end, recurrenceId, ls.toLocalDate(), last, ls.toLocalTime(), le.toLocalTime()));
   }
 
-  /// The instances of an event that may be in the window, by start: its
-  /// rules' and `RDATE`s', less its exceptions. Each has an end if an
-  /// `RDATE` period gave it one.
-  private List<RDate> instances(DefaultIcalEvent m) {
-    if (!m.repeats()) return List.of(new RDate(m.start(), m.end()));
-    var starts = new LinkedHashMap<String, RDate>();
-    if (m.rules().isEmpty()) starts.put(Times.key(m.start()), new RDate(m.start(), null));
+  /// An instance of a repeating event: its start, its end if an `RDATE`
+  /// period gave it one, and which instance it is, in the form of the
+  /// event's start. A period keeps its own times.
+  private record Instance(IcalTime start, @Nullable IcalTime end, IcalTime recurrenceId) {}
+
+  /// The instances of an event that may be in the window: its rules' and
+  /// `RDATE`s', less its exceptions.
+  private List<Instance> instances(DefaultIcalEvent m) {
+    if (!m.repeats()) return List.of(new Instance(m.start(), m.end(), m.start()));
+    var starts = new LinkedHashMap<String, Instance>();
+    if (m.rules().isEmpty()) starts.put(Times.key(m.start()), new Instance(m.start(), null, m.start()));
     for (var rule : m.rules()) {
-      expand(m, rule, t -> starts.putIfAbsent(Times.key(t), new RDate(t, null)));
+      expand(m, rule, t -> starts.putIfAbsent(Times.key(t), new Instance(t, null, t)));
     }
     for (var r : m.rdates()) {
       var s = sameForm(r.start(), m);
-      starts.putIfAbsent(Times.key(s), new RDate(s, r.end()));
+      starts.putIfAbsent(Times.key(s), r.end() == null ? new Instance(s, null, s) : new Instance(r.start(), r.end(), s));
     }
     var excluded = new HashSet<String>();
     var excludedDays = new HashSet<LocalDate>();
@@ -163,10 +167,10 @@ final class Occurrences {
       else excluded.add(Times.key(s));
     }
     for (var rule : m.exceptionRules()) expand(m, rule, t -> excluded.add(Times.key(t)));
-    var list = new ArrayList<RDate>();
+    var list = new ArrayList<Instance>();
     for (var i : starts.values()) {
-      if (excluded.contains(Times.key(i.start()))) continue;
-      if (!excludedDays.isEmpty() && excludedDays.contains(Times.local(i.start(), localZone(m)).toLocalDate())) continue;
+      if (excluded.contains(Times.key(i.recurrenceId()))) continue;
+      if (!excludedDays.isEmpty() && excludedDays.contains(Times.local(i.recurrenceId(), localZone(m)).toLocalDate())) continue;
       list.add(i);
     }
     return list;

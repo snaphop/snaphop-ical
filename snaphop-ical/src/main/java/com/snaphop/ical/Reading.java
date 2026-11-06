@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /// Reads calendar text into a [DefaultIcalCalendar]: the events of its
@@ -17,6 +18,7 @@ final class Reading {
   private final DefaultIcalReader reader;
   private final Problems problems;
   private Zones zones = new Zones(List.of());
+  private final Set<String> unknownZones = new HashSet<>();
 
   private Reading(DefaultIcalReader reader) {
     this.reader = reader;
@@ -231,8 +233,8 @@ final class Reading {
   private @Nullable DefaultIcalRecurrence rule(Prop p, IcalTime start, String where) {
     DefaultIcalRecurrence rule;
     try {
-      rule = DefaultIcalRecurrence.parse(p.value(), soft ->
-          problems.report(p.line(), p.name() + ": " + soft, "that part is left out", Problems.quote(p.text())));
+      rule = DefaultIcalRecurrence.parse(p.value(), (problem, consequence) ->
+          problems.report(p.line(), p.name() + ": " + problem, consequence, Problems.quote(p.text())));
     } catch (IllegalArgumentException e) {
       problems.report(p.line(), p.name() + ": " + e.getMessage(), "the event is left out", Problems.quote(p.text()));
       return null;
@@ -294,9 +296,11 @@ final class Reading {
     if (tzid == null) return new Timed(new IcalTime.Floating(local), null);
     var tz = zones.find(tzid);
     if (tz == null) {
-      problems.report(p.line(), "The time zone " + Problems.quote(tzid)
-          + " is not a zone name this reader knows, nor a VTIMEZONE of the calendar", "the time is read as floating",
-          Problems.quote(p.text()));
+      if (unknownZones.add(tzid.strip())) {
+        problems.report(p.line(), "The time zone " + Problems.quote(tzid)
+            + " is not a zone name this reader knows, nor a VTIMEZONE of the calendar", "its times are read as floating",
+            Problems.quote(p.text()));
+      }
       return new Timed(new IcalTime.Floating(local), null);
     }
     try {

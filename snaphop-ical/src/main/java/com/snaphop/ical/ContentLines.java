@@ -102,6 +102,9 @@ final class ContentLines {
 
   /// Reads the components at the top of `text`: normally one `VCALENDAR`.
   static List<Comp> read(CharSequence text, Problems problems) {
+    if (text.chars().allMatch(c -> Character.isWhitespace(c) || c == '\uFEFF')) {
+      throw new IcalParseException("Not iCalendar: the text is empty.", 0);
+    }
     var lines = unfold(text, problems);
     var first = lines.isEmpty() ? null : lines.getFirst();
     if (first == null) {
