@@ -43,7 +43,8 @@ comments. The build needs JDK 25 or newer. `.sdkmanrc` names the JDK we build wi
 | Module | What it is |
 |--------|------------|
 | `snaphop-ical` | The library: module and package `com.snaphop.ical` |
-| `test/snaphop-ical-test` | End to end tests, with ical4j as the oracle |
+| `test/snaphop-ical-test` | End to end tests, with ical4j and ICAL.js as oracles |
+| `test/corpus` | Test data from other projects, each with its license and `UPSTREAM.md`; not a Maven module |
 
 ## Testing
 
@@ -57,7 +58,14 @@ are very fast. Slow tests always go in a test module. So does any test that need
 library.
 
 ical4j may be used in test modules as an oracle: read the same text with both libraries and
-compare. It never becomes a dependency of the library module.
+compare. It never becomes a dependency of the library module. So may
+[ICAL.js](https://github.com/kewisch/ical.js), which the test module runs on GraalJS from its
+WebJar. Where an oracle works something out differently, the test lists the file or sample with
+why, and checks it still differs, so that a fix on either side is noticed.
+
+Data copied from other projects goes in `test/corpus/<project>`, with its license and an
+`UPSTREAM.md` naming the repository, commit, original paths and any changes. The test module
+reads it from there, by path.
 
 Golden strings of error messages are desirable in this library. For error messages, always
 assert the complete message with `assertEquals` and a Java text block (`"""`). Do not use

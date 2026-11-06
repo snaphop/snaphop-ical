@@ -55,9 +55,10 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <!-- Without Graal's compiler, GraalJS interprets, which is fast
-               enough here; it needn't say so. -->
-          <argLine>-Dpolyglot.engine.WarnInterpreterOnly=false --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</argLine>
+          <!-- GraalJS interprets, which is fast enough here, on any JDK: a
+               GraalVM JDK's own compiler would have to be the same version
+               as GraalJS. -->
+          <argLine>-Dtruffle.TruffleRuntime=com.oracle.truffle.api.impl.DefaultTruffleRuntime -Dpolyglot.engine.WarnInterpreterOnly=false --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</argLine>
           <systemPropertyVariables>
             <icaljs.version>${icaljs.version}</icaljs.version>
           </systemPropertyVariables>

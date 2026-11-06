@@ -32,8 +32,8 @@ final class Reading {
   private DefaultIcalCalendar calendar(CharSequence text) {
     var calendars = ContentLines.read(text, problems);
     if (calendars.isEmpty()) {
-      // ContentLines checked the text starts a VCALENDAR, which it ends if
-      // the text does not; so this is a VCALENDAR that ended something else.
+      // Not reached: the text starts a VCALENDAR, which ContentLines ends
+      // when the text does, if nothing else does.
       throw new IcalParseException("Not iCalendar: the text has no VCALENDAR.", 0);
     }
     var calendar = calendars.getFirst();
