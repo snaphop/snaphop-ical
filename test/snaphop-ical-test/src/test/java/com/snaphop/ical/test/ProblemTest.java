@@ -5,8 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.snaphop.ical.IcalParseException;
 import com.snaphop.ical.IcalReader;
+import com.snaphop.ical.IcalWarning;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -126,6 +130,19 @@ class ProblemTest {
         """, 4, """
         Line 4: BEGIN:VEVENT has no END:VEVENT before line 8: "END:VCALENDAR\"""", """
         Line 4: BEGIN:VEVENT has no END:VEVENT before line 8, so it ends there: "END:VCALENDAR\""""),
+    /// Text cut short, as a download that stopped part way might be.
+    CUT_SHORT("""
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//SnapHop//snaphop-ical test//EN
+        BEGIN:VEVENT
+        UID:a
+        DTSTAMP:20261101T120000Z
+        DTSTART:20261102T090000
+        """, 4, """
+        Line 4: BEGIN:VEVENT has no END:VEVENT before the text ends: "BEGIN:VEVENT\"""", """
+        Line 4: BEGIN:VEVENT has no END:VEVENT before the text ends, so it ends there: "BEGIN:VEVENT"
+        Line 1: BEGIN:VCALENDAR has no END:VCALENDAR before the text ends, so it ends there: "BEGIN:VCALENDAR\""""),
     /// RFC 5545 requires these; lax mode reads the text as well without
     /// them, so says nothing.
     NO_DTSTAMP("""
@@ -198,6 +215,43 @@ class ProblemTest {
       assertEquals(p.strict, e.getMessage());
       return;
     }
-    assertEquals(expected, String.join("\n", lax.read(p.text).warnings()));
+    assertEquals(expected, messages(lax.read(p.text).warnings()));
+  }
+
+  /// Handed to a consumer, the same warnings, as they are found, and none
+  /// kept in the calendar.
+  @ParameterizedTest
+  @EnumSource(Problem.class)
+  void laxHandsOverWhatItDidAboutIt(Problem p) {
+    var lax = reader(IcalReader.Mode.LAX);
+    var expected = p.lax;
+    var found = new ArrayList<IcalWarning>();
+    if (expected == null) {
+      var e = assertThrows(IcalParseException.class, () -> lax.read(p.text, found::add));
+      assertEquals(p.strict, e.getMessage());
+      return;
+    }
+    assertEquals(List.of(), lax.read(p.text, found::add).warnings());
+    assertEquals(expected, messages(found));
+  }
+
+  /// A warning's parts, which make its message.
+  @Test
+  void aWarningInParts() {
+    var warnings = reader(IcalReader.Mode.LAX).read(Problem.END_BEFORE_START.text).warnings();
+    assertEquals(List.of(new IcalWarning(8, "DTEND is before DTSTART", "DTEND is left out", "\"DTEND:20261102T080000\"")),
+        warnings);
+  }
+
+  /// Strict mode never hands over a warning: it throws the first problem.
+  @Test
+  void strictHandsOverNothing() {
+    var found = new ArrayList<IcalWarning>();
+    assertThrows(IcalParseException.class, () -> reader(IcalReader.Mode.STRICT).read(Problem.END_BEFORE_START.text, found::add));
+    assertEquals(List.of(), found);
+  }
+
+  static String messages(List<IcalWarning> warnings) {
+    return String.join("\n", warnings.stream().map(IcalWarning::message).toList());
   }
 }

@@ -87,7 +87,8 @@ absolutely no other choice.
 Errors are exceptions or results, never log messages:
 
 - `IcalReader.Mode.STRICT` throws `IcalParseException`.
-- `IcalReader.Mode.LAX` skips what it cannot read and lists it in `IcalCalendar.warnings()`.
+- `IcalReader.Mode.LAX` skips what it cannot read and reports it as an `IcalWarning`: a record
+  of its parts, never just a string.
 
 ### No logging
 

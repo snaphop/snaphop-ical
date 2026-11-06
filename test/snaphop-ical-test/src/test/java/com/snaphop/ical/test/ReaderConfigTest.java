@@ -66,7 +66,7 @@ class ReaderConfigTest {
     assertEquals(24 * 60, minutes);
     assertEquals("""
         Line 19: An event has no UID, so it is left out: "Practice with no UID" at 20261121T090000""",
-        String.join("\n", calendar.warnings()));
+        ProblemTest.messages(calendar.warnings()));
   }
 
   /// Rules made to keep a reader busy, as a feed from elsewhere might have:

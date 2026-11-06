@@ -6,6 +6,7 @@ import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Objects;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
 /// Reads iCalendar (RFC 5545) text into an immutable [IcalCalendar].
@@ -23,17 +24,38 @@ import org.jspecify.annotations.Nullable;
 /// A calendar is read once and then asked for any window of days.
 ///
 /// The reader never logs. Text it cannot read is reported according to its [Mode]:
-/// as an [IcalParseException], or as a warning in [IcalCalendar#warnings()].
+/// as an [IcalParseException], or as an [IcalWarning], kept in
+/// [IcalCalendar#warnings()] or handed to a consumer.
 public sealed interface IcalReader {
 
-  /// Reads a calendar from text.
+  /// Reads a calendar from text, keeping its warnings in [IcalCalendar#warnings()].
   ///
   /// @param text the whole iCalendar text, starting with `BEGIN:VCALENDAR`
   /// @return the calendar read
   /// @throws IcalParseException if the text cannot be read in the reader's [Mode]
   IcalCalendar read(CharSequence text);
 
-  /// Reads a calendar from a character stream, until its end.
+  /// Reads a calendar from text, handing each warning to `warnings` as it is
+  /// found, in place of keeping them.
+  ///
+  /// Nothing holds a warning once `warnings` has it, so one that is counted
+  /// or logged and dropped need not last as long as the calendar. The
+  /// calendar's [IcalCalendar#warnings()] is empty.
+  ///
+  /// ```java
+  /// var count = new int[1];
+  /// var calendar = reader.read(text, w -> count[0]++);
+  /// ```
+  ///
+  /// @param text the whole iCalendar text, starting with `BEGIN:VCALENDAR`
+  /// @param warnings called with each warning, during this call, on this thread;
+  ///        never called in [Mode#STRICT]
+  /// @return the calendar read
+  /// @throws IcalParseException if the text cannot be read in the reader's [Mode]
+  IcalCalendar read(CharSequence text, Consumer<? super IcalWarning> warnings);
+
+  /// Reads a calendar from a character stream, until its end, keeping its
+  /// warnings in [IcalCalendar#warnings()].
   ///
   /// The caller closes `reader`.
   ///
@@ -54,7 +76,7 @@ public sealed interface IcalReader {
   enum Mode {
     /// Anything that breaks RFC 5545 throws an [IcalParseException].
     STRICT,
-    /// What cannot be read is skipped and described in [IcalCalendar#warnings()].
+    /// What cannot be read is skipped and described in an [IcalWarning].
     /// Calendars from real clients often break the RFC in small ways, so this
     /// is the default. An [IcalParseException] is still thrown when the text is
     /// not a calendar at all.
@@ -158,6 +180,11 @@ record DefaultIcalReader(ZoneId zone, IcalReader.Mode mode, IcalReader.Cancelled
   @Override
   public IcalCalendar read(CharSequence text) {
     return Reading.read(text, this);
+  }
+
+  @Override
+  public IcalCalendar read(CharSequence text, Consumer<? super IcalWarning> warnings) {
+    return Reading.read(text, this, Objects.requireNonNull(warnings, "warnings"));
   }
 
   @Override

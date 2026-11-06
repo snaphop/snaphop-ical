@@ -8,6 +8,7 @@
 /// 4. [IcalOccurrence] is one instance of an event in a window of days.
 /// 5. [IcalTime] is a date, a date-time in a zone, or a floating date-time, as
 ///    event times are written in iCalendar.
-/// 6. [IcalParseException] reports text that cannot be read.
+/// 6. [IcalParseException] reports text that cannot be read, and
+///    [IcalWarning] text that lax mode read in its own way.
 @org.jspecify.annotations.NullMarked
 package com.snaphop.ical;
