@@ -13,6 +13,13 @@
   <name>snaphop-ical-test-parent</name>
   <description>Test modules: slow tests, and tests that need other libraries</description>
 
+  <properties>
+    <!-- Tests are never installed or published: only the library and its
+         parent are. -->
+    <maven.install.skip>true</maven.install.skip>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <modules>
     <module>snaphop-ical-test</module>
   </modules>

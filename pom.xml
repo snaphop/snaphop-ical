@@ -39,12 +39,32 @@
     </developer>
   </developers>
 
+  <!--
+    Deploy targets come from the snaphop profile in .snaphop/settings.xml, as
+    in flylite: ./mvnw -s .snaphop/settings.xml deploy (the password from the
+    NEXUS_SNAPHOP_COM_PASSWORD environment variable). See bin/release.sh.
+  -->
+  <distributionManagement>
+    <snapshotRepository>
+      <id>${snapshotRepository.id}</id>
+      <name>${snapshotRepository.name}</name>
+      <url>${snapshotRepository.url}</url>
+    </snapshotRepository>
+    <repository>
+      <id>${releaseRepository.id}</id>
+      <name>${releaseRepository.name}</name>
+      <url>${releaseRepository.url}</url>
+    </repository>
+  </distributionManagement>
+
   <properties>
     <!-- The oldest LTS with Markdown doc comments (JDK 23+). The build
          itself may run on a newer JDK. -->
     <maven.compiler.release>25</maven.compiler.release>
     <maven.compiler.failOnWarning>true</maven.compiler.failOnWarning>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Reproducible jars: the same sources make the same bytes. -->
+    <project.build.outputTimestamp>2026-11-06T00:00:00Z</project.build.outputTimestamp>
     <jspecify.version>1.0.1</jspecify.version>
     <junit.version>6.1.3</junit.version>
     <ical4j.version>4.4.0</ical4j.version>
@@ -159,6 +179,36 @@
           <version>3.5.0</version>
         </plugin>
         <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.4.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-help-plugin</artifactId>
+          <version>3.5.2</version>
+        </plugin>
+        <plugin>
+          <!-- bin/release.sh sets each module's version with it. -->
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>versions-maven-plugin</artifactId>
+          <version>2.23.0</version>
+          <configuration>
+            <generateBackupPoms>false</generateBackupPoms>
+            <processAllModules>true</processAllModules>
+          </configuration>
+        </plugin>
+        <plugin>
           <!-- Whatever is public must be documented, @param and @return
                included: making something public should be worth explaining.
                Package-private code needs no comments. -->
@@ -203,4 +253,44 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <!-- A release (bin/release.sh, then the deploy workflow on its tag):
+           no SNAPSHOT version or dependency, and deployed with
+           .snaphop/settings.xml. -->
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>enforce-release</id>
+                <goals>
+                  <goal>enforce</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <requireReleaseVersion>
+                      <message>Releases must not be SNAPSHOT versions</message>
+                    </requireReleaseVersion>
+                    <requireReleaseDeps>
+                      <message>Releases must not depend on SNAPSHOT versions</message>
+                    </requireReleaseDeps>
+                    <requireProperty>
+                      <property>releaseRepository.url</property>
+                      <message>Deploy with -s .snaphop/settings.xml</message>
+                    </requireProperty>
+                  </rules>
+                  <fail>true</fail>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

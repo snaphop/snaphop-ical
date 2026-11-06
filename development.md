@@ -46,6 +46,32 @@ comments. The build needs JDK 25 or newer. `.sdkmanrc` names the JDK we build wi
 | `test/snaphop-ical-test` | End to end tests, with ical4j and ICAL.js as oracles |
 | `test/corpus` | Test data from other projects, each with its license and `UPSTREAM.md`; not a Maven module |
 
+## Publishing
+
+The library and its parent pom are published to SnapHop's Maven repository, as
+[flylite](https://github.com/snaphop/flylite) is; Maven Central may come later. Test modules are
+never installed or published.
+
+| Repository | Deployed to | Read from |
+|------------|-------------|-----------|
+| Releases | `https://maven.snaphop.com/deploy/repository/public-release/` | `https://maven.snaphop.com/release` |
+| Snapshots | `https://maven.snaphop.com/deploy/repository/public-snapshot/` | |
+
+The deploy targets and their user names are in `.snaphop/settings.xml`. The password comes from
+the `NEXUS_SNAPHOP_COM_PASSWORD` environment variable, a secret of the GitHub repository (the
+name is older than the server, which is not Nexus).
+
+- **A release:** `bin/release.sh` on `main`, clean and in sync with `origin/main`. It sets the
+  version to `X.Y.Z`, runs `verify` with the `release` profile, commits `Release X.Y.Z`, tags
+  `vX.Y.Z`, commits `Prepare X.Y.(Z+1)-SNAPSHOT`, and pushes `main` and the tag. The tag runs the
+  `Deploy to SnapHop` workflow, which builds, tests and deploys that version. `NO_PUSH=true`
+  stops before pushing. The `release` profile refuses a `SNAPSHOT` version or dependency, and a
+  build without `-s .snaphop/settings.xml`.
+- **A snapshot:** run the `Deploy to SnapHop` workflow by hand on a branch.
+- **From this machine**, as a fallback: `bin/deploy.sh`, with the password in the environment.
+
+An agent does not release, push a tag or deploy unless asked to.
+
 ## Testing
 
 Prefer end to end tests over unit tests: read real calendar text and check what comes out.
