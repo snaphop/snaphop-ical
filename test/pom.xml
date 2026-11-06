@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.snaphop</groupId>
     <artifactId>snaphop-ical-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1-SNAPSHOT</version>
   </parent>
   <artifactId>snaphop-ical-test-parent</artifactId>
   <packaging>pom</packaging>
