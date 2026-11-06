@@ -112,7 +112,7 @@ class SampleCalendarTest {
     /// of it, and one an invitation to a single time of an event the
     /// calendar doesn't have. Exception dates in UTC for times in a zone;
     /// RDATEs of whole days and of a period; and a cancelled repeating event.
-    /// ICAL.js 2.1.0 fails on the period. ical4j leaves the UTC exception
+    /// ICAL.js fails on the period. ical4j leaves the UTC exception
     /// dates in, and names the period's instance by its time, not its day.
     MOVED("moved.ics", """
         name: null

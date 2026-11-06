@@ -60,8 +60,9 @@ library.
 ical4j may be used in test modules as an oracle: read the same text with both libraries and
 compare. It never becomes a dependency of the library module. So may
 [ICAL.js](https://github.com/kewisch/ical.js), which the test module runs on GraalJS from its
-WebJar. Where an oracle works something out differently, the test lists the file or sample with
-why, and checks it still differs, so that a fix on either side is noticed.
+source in `test/corpus/icaljs/lib`, copied from the same commit as the ICAL.js tests there. Where
+an oracle works something out differently, the test lists the file or sample with why, and checks
+it still differs, so that a fix on either side is noticed.
 
 Data copied from other projects goes in `test/corpus/<project>`, with its license and an
 `UPSTREAM.md` naming the repository, commit, original paths and any changes. The test module

@@ -1,4 +1,4 @@
-# ICAL.js test data
+# ICAL.js tests and code
 
 | | |
 |---|---|
@@ -8,6 +8,7 @@
 
 | Here | Original path | Changes |
 |------|---------------|---------|
+| `lib/*.js` | `lib/ical/` | None. The tests run it on GraalJS as an oracle |
 | `parser/*.ics`, `parser/*.json` | `test/parser/` | None. Only the iCalendar pairs, not the vCard ones |
 | `samples/*.ics` | `samples/` | None |
 | `recur_iterator.txt` | `test/recur_iterator_test.js` | Derived: each `testRRULE` case written as a record like libical's `icalrecur_test.txt` |
@@ -23,5 +24,8 @@ A record has the case's `RRULE`, its `DTSTART`, the `INSTANCES` it expects
 and, when the test gives one, `MAX`: how many instances the test asked the
 iterator for. A comment line before each names the suite and rule.
 
-ICAL.js itself, which the tests run as an oracle, comes from the
-`org.webjars.npm:ical.js` test dependency, not from here.
+The code and the tests come from one commit, so the oracle is the code
+those tests were written for: unreleased, newer than ICAL.js 2.2.1, the
+latest release. To move to a later commit, copy `lib/ical/`, `samples/`
+and `test/parser/` from it again, and make `recur_iterator.txt` again
+with the command above.
