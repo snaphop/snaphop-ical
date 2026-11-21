@@ -1,2 +1,3 @@
-# iCalendar text must keep its CRLF line endings.
+# iCalendar and vCard text must keep its CRLF line endings.
 *.ics -text
+*.vcf -text

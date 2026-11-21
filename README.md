@@ -1,22 +1,30 @@
 # snaphop-ical
 
-A small, modern Java library for iCalendar ([RFC 5545](https://www.rfc-editor.org/rfc/rfc5545)):
-the `.ics` files and feeds that calendar apps share. It reads events and works out repeating
+Small, modern Java libraries for the calendars and contacts that apps share. Each has no
+runtime dependencies.
+
+| Library | Module | What it is |
+|---------|--------|------------|
+| `snaphop-ical` | `com.snaphop.ical` | iCalendar ([RFC 5545](https://www.rfc-editor.org/rfc/rfc5545)): reads events and works out repeating ones, repeats rules on their own, writes calendars. A lighter replacement for [ical4j](https://github.com/ical4j/ical4j) |
+| `snaphop-vcard` | `com.snaphop.vcard` | vCard (2.1, 3.0 and 4.0): reads the contacts phones and apps export. A lighter, faster and safer replacement for [ez-vcard](https://github.com/mangstadt/ez-vcard) when reading is all you need. See [vCard](#vcard-snaphop-vcard) |
+
+The rest of this page is iCalendar until [vCard](#vcard-snaphop-vcard).
+
+## iCalendar: snaphop-ical
+
+The `.ics` files and feeds that calendar apps share. It reads events and works out repeating
 ones, works out repeating rules on their own (as a todo app repeats tasks), and writes events
 as a calendar others can subscribe to.
 
-It is meant as a lighter replacement for [ical4j](https://github.com/ical4j/ical4j) when that is
-all you need.
+### Status
 
-## Status
-
-Experimental: the first release will be 0.1.0. It reads events and expands
+Experimental, released since 0.1.0. It reads events and expands
 repeating ones well enough to replace ical4j in
 [agentic-todo](https://github.com/agentgt/agentic-todo), which reads the
 calendar feeds a family subscribes to, and will repeat tasks and publish
 them as a feed. Expect the API to change before 1.0.
 
-## Usage
+### Usage
 
 Releases are published to SnapHop's Maven repository:
 
@@ -32,7 +40,7 @@ Releases are published to SnapHop's Maven repository:
 <dependency>
   <groupId>com.snaphop</groupId>
   <artifactId>snaphop-ical</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -96,7 +104,7 @@ The public types:
 | `IcalWarning` | Text that lax mode read in its own way: the line, the problem and what was done |
 | `IcalWriter` | Writes events as a calendar; configured by `IcalWriter.builder()`: a product id, a name, a refresh interval, a stamp |
 
-## What it reads
+### What it reads
 
 - **Content lines** (RFC 5545 section 3.1): folded lines, quoted parameters,
   RFC 6868 escapes, line endings of CRLF, LF or CR, a byte order mark.
@@ -111,7 +119,7 @@ The public types:
   daylight saving time skips or repeats are placed as RFC 5545 says.
 - **The calendar's name**: `X-WR-CALNAME`, or `NAME` (RFC 7986).
 
-## What it writes
+### What it writes
 
 - **Events**: the same properties, and a `DTSTAMP`. A date-time in a zone has
   its `TZID` and a `VTIMEZONE` made from the JDK's rules, from a year before
@@ -136,7 +144,7 @@ Not yet:
   warning; a rule with `RSCALE` other than `GREGORIAN` (RFC 7529), whose event is
   left out with a warning.
 
-### Limits on work
+#### Limits on work
 
 A calendar is often someone else's text. An event that repeats more often than
 `mostFrequent` (hourly by default) is refused, counting what its parts make it:
@@ -147,7 +155,7 @@ A rule that makes no start in 400 years (times its interval), the Gregorian cale
 never will, so it is looked at no further: `FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30` ends there.
 How much text to read is the caller's to limit.
 
-## How it is tested
+### How it is tested
 
 End to end, through the public reader, in the `test` module:
 
@@ -173,7 +181,7 @@ End to end, through the public reader, in the `test` module:
   every calendar above read, written and read again, with the same events and
   occurrences.
 
-## Design principles
+### Design principles
 
 - **Builders configure; everything else is immutable.** Builders are the only mutable types.
   Readers, calendars, events and occurrences are immutable and thread-safe.
@@ -184,7 +192,7 @@ End to end, through the public reader, in the `test` module:
   Error messages are tested as complete golden strings.
 - **No logging.** See below.
 
-### No logging
+#### No logging
 
 A calendar parser has no business logging. Problems are reported to the caller, who decides
 what matters:
@@ -196,6 +204,154 @@ what matters:
 If something ever must be logged, it will use `System.Logger` from the JDK, never SLF4J or
 another logging library.
 
+## vCard: snaphop-vcard
+
+Reads the contacts that phones, computers and web apps export (`.vcf` files): vCard 2.1, 3.0
+and 4.0, into plain records. It was written to replace ez-vcard in
+[agentic-todo](https://github.com/agentgt/agentic-todo), where a parent adds the family's
+contacts from a file or the phone, and reads only: it does not write vCards yet.
+
+```xml
+<dependency>
+  <groupId>com.snaphop</groupId>
+  <artifactId>snaphop-vcard</artifactId>
+  <version>0.2.0</version>
+</dependency>
+```
+
+It has no runtime dependencies. Its module is `com.snaphop.vcard`.
+
+```java
+VcardReader reader = VcardReader.builder().build(); // lax; or .mode(VcardReader.Mode.STRICT)
+
+VcardBook book = reader.read(Files.readAllBytes(path)); // UTF-8, or UTF-16 with its mark
+for (Vcard card : book.cards()) {
+  card.formattedName();   // "Maya Lucía Rivera"
+  card.name().given();    // "Maya"
+  card.birthdayOrNull();  // --05-03: a day, with its year when the card has one
+  for (Vcard.Value phone : card.phones()) {
+    phone.value();        // "555-010-0102"
+    phone.types();        // [cell, voice]
+    phone.label();        // "Grandma's": what someone typed on an iPhone
+  }
+}
+for (VcardWarning w : book.warnings()) {
+  w.message();            // Line 7: BDAY is not a date, so it is left out: "BDAY:2014-02-30"
+  w.messageWithoutText(); // Line 7: BDAY is not a date, so it is left out
+}
+```
+
+The public types:
+
+| Type | What it is |
+|------|------------|
+| `VcardReader` | Reads text, a `Reader` or a file's bytes; configured by `VcardReader.builder()`: a `Mode` |
+| `VcardBook` | What was read: the cards, and the warnings |
+| `Vcard` | One contact: its names, emails, phones, addresses, birthday, anniversary, related people, notes, groups, kind and members, and every other property as written. `Vcard.Value`, `Vcard.Address`, `Vcard.Name` and `Vcard.Day` hold them |
+| `VcardParseException` | Text that cannot be read |
+| `VcardWarning` | Text that lax mode read in its own way: the line, the problem and what was done |
+
+### What it reads
+
+- **Content lines**: folded lines (by a space or a tab), groups (`item1.TEL`), quoted
+  parameters, RFC 6868's `^` escapes in vCard 4.0, line endings of CRLF, LF or CR (and an
+  iPhone's CR CR LF), a byte order mark.
+- **vCard 2.1** as older Android phones, Outlook and BlackBerry write it: bare parameters
+  (`TEL;CELL;PREF`), quoted-printable values with soft line breaks in their `CHARSET`, base64
+  values ended by a blank line, and agents (a card inside a card).
+- **Bytes**: UTF-8; UTF-16 after its byte order mark, as Windows tools write it; and, in lax
+  mode, Windows-1252 when the bytes are not UTF-8, as older Outlook wrote them.
+- **Values**: `FN`, `N`, `NICKNAME`, `ORG`, `TITLE`, `BDAY`, `ANNIVERSARY`, `EMAIL`, `TEL`
+  (a `tel:` URI as its number), `ADR`, `URL`, `RELATED`, `NOTE`, `CATEGORIES`, `KIND`, `MEMBER`
+  and `UID`, each with its types, whether it is preferred, and its label.
+- **Apple's extensions**, which every iPhone and Mac export has: a label typed for a value
+  (`item1.X-ABLabel:Grandma's`, or Apple's own `_$!<Mother>!$_` as `mother`), a birthday
+  without its year (`BDAY;X-APPLE-OMIT-YEAR=1604:1604-05-03` is `--05-03`), related names
+  (`X-ABRELATEDNAMES`), anniversaries (`X-ABDATE`), groups and their members
+  (`X-ADDRESSBOOKSERVER-KIND`, `X-ADDRESSBOOKSERVER-MEMBER`), companies (`X-ABShowAs`), and
+  `X-ABUID`.
+- **Others' extensions**: the anniversary, spouse, manager and assistant as Outlook
+  (`X-MS-*`), Evolution (`X-EVOLUTION-*`) and Thunderbird (`X-ANNIVERSARY`, `X-SPOUSE`) write them.
+
+Everything else a card has is in `Vcard.properties()`, as written. Photos, logos, sounds and
+keys are passed over without being kept or decoded, however large.
+
+### Safe with someone's contacts
+
+A contact is personal: a phone number, a home address, a note about a child. The reader is
+built so that none of it leaks by accident.
+
+- **It never logs**, as snaphop-ical doesn't.
+- **A warning keeps the text apart.** `problem()` and `consequence()` are the reader's own words
+  and property names, never the text; only `where()` quotes it. Log `messageWithoutText()`,
+  and show `message()` only to whoever gave the file. `VcardParseException.problem()` is the same.
+  The fuzz tests check every warning against the full list of the reader's words.
+- **`toString()` shows no text**: a card is `Vcard[3.0, line 1]`.
+- **Linear work and memory.** No value is read twice; nothing grows faster than the text.
+  The tests read text written to hurt a reader: a 64 MB photo, a note folded a million times,
+  a million quoted-printable soft breaks, 100,000 cards, 100,000 nested agents, 100,000
+  parameters on one line, 10 MB of junk on one line. Each takes well under a second, and the
+  test fails at three. How much text to read is the caller's to limit.
+- **Only ASCII digits are numbers**, in dates and in quoted-printable's hex, not other scripts'.
+
+### Against ez-vcard
+
+What agentic-todo found wrong with ez-vcard 0.12.2, and what this reader does instead:
+
+| ez-vcard | snaphop-vcard |
+|----------|---------------|
+| 2.4 MB as it runs: 287 classes, its own parser, and FreeMarker, which loading any card needs | 49 KB, 29 classes, nothing else |
+| A file starting with a byte order mark reads as no cards, with no warning | Reads it |
+| The platform's charset unless given a reader | UTF-8, UTF-16 with its mark, or Windows-1252 with a warning |
+| Decodes every photo into memory | Passes over photos without keeping them |
+| A day that does not exist (`2014-02-30`) vanishes, or is kept, with no warning | Reported, then left out |
+| Warnings quote the whole line in one string | The text apart from the problem |
+| Nulls from most getters, unannotated; mutable beans | `@NullMarked`, `OrNull` where null is possible, immutable records |
+| Java 8, no `module-info` | Java 25, a named module |
+| Apple's labels, years left out, related names and groups are left to the caller | Read as what they mean |
+
+Measured by `Benchmark` (see [Building](#building)), on JDK 27 on a 20-core ARM machine:
+
+| | snaphop-vcard | ez-vcard |
+|---|---:|---:|
+| 10,000 cards from the samples (24 MB): time | 96 ms | 699 ms |
+| Same: memory allocated, and kept by the result | 250 MB, 74 MB | 469 MB, 90 MB |
+| 500 iPhone cards with their photos (23 MB): time | 47 ms | 575 ms |
+| Same: memory allocated, and kept | 20 MB, 5 MB | 121 MB, 22 MB |
+| One card with a 64 MB photo | 119 ms | 1,686 ms |
+| 44,800 broken texts (the fuzz tests): exceptions other than the reader's own | 0 | 1 (`DateTimeException`) |
+
+### How it is tested
+
+End to end, through the public reader, in `test/snaphop-vcard-test`: more than 7,700 tests.
+
+- **Oracles on real exports.** Every sample is read by this reader, by
+  [ez-vcard](https://github.com/mangstadt/ez-vcard) and by ICAL.js (which reads vCard 3.0 and
+  4.0), and compared field by field: 28 files × 2 oracles × 18 fields. The files are ez-vcard's
+  own exports from an iPhone, a Mac, Android, BlackBerry, Gmail, Outlook 2003 and 2007, Lotus
+  Notes, Evolution and Thunderbird ([`test/corpus/ez-vcard`](test/corpus/ez-vcard)), ICAL.js's
+  vCard tests, and samples written here for Apple, Google, an old Android phone, Outlook in
+  Windows-1252, and vCard 4.0. Where an oracle differs, the test says why, and checks it still
+  does; each time, it is an extension the oracle leaves raw, or the oracle misreading the text.
+- **Generated cards**: every version × property × tricky value (commas, semicolons,
+  backslashes, newlines, accents, emoji, CJK, quotes, `=`, carets, long lines) × way of writing
+  types × folding, 1,815 cards. This reader, in strict mode, must read each as written; each
+  oracle is checked against it, with its differences listed by rule.
+- **Dates**: every form apps write a birthday or anniversary in (dates, date-times, no year,
+  Apple's, partial dates, text, days that do not exist, another script's digits), in each
+  version, against both oracles.
+- **Transforms**: every sample written 18 other ways that mean the same (LF, CR, mixed line
+  endings, folded at every character or every 3, 10 or 75 octets, with a tab, a byte order
+  mark, names in lower or upper case, blank lines, UTF-8 and UTF-16 bytes, a reader that gives
+  one character at a time, twice in one file) must read the same.
+- **Problems** in full: the message strict mode throws, its line and problem, and lax mode's
+  warnings and what it still reads, for each kind of broken text.
+- **Hostile text and fuzzing**: the hostile texts above, and every sample broken 200 times in
+  each of 8 ways, read in both modes, as text and as bytes.
+
+Mutation testing is not used: the oracles and generated cases cover the parser's parts, and
+none is risky enough to need it yet.
+
 ## Building
 
 Requires Java 25 or newer to build; the library targets Java 25.
@@ -204,11 +360,18 @@ Requires Java 25 or newer to build; the library targets Java 25.
 ./mvnw verify
 ```
 
+The comparison with ez-vcard above is a benchmark, not a test: it runs only when asked, and
+writes `test/snaphop-vcard-test/target/benchmark.md`.
+
+```
+./mvnw -pl test/snaphop-vcard-test -am package -Dtest=Benchmark -Dbenchmark=true -Dsurefire.failIfNoSpecifiedTests=false
+```
+
 See [development.md](development.md) for how the project is built, tested and designed.
 
 ## License
 
 [Zero-Clause BSD](LICENSE) (`0BSD`): use it for anything, with no conditions, not even keeping the notice.
 
-Test data copied from other projects, such as ICAL.js or libical, keeps its own license. It lives in its own directory under `test/`
+Test data copied from other projects, such as ICAL.js, libical or ez-vcard, keeps its own license. It lives in its own directory under `test/`
 with that license and a note of where it came from, and is never part of a published jar.

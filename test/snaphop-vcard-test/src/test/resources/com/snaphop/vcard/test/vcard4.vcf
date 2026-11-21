@@ -1,0 +1,31 @@
+BEGIN:VCARD
+VERSION:4.0
+KIND:individual
+FN:Dr. Amara Nwosu
+N:Nwosu;Amara;Ifeoma,Grace;Dr.;
+NICKNAME:Ama,Mara
+GENDER:F
+BDAY:--0418
+ANNIVERSARY:20150620
+TEL;VALUE=uri;TYPE="voice,cell";PREF=1:tel:+1-555-010-0701
+TEL;VALUE=uri;TYPE=work:tel:+1-555-010-0702;ext=34
+EMAIL;TYPE=work:amara@clinic.example.com
+EMAIL;PREF=1:amara@example.com
+ADR;TYPE=home;LABEL="7 Elm Court^nApt 2^nSalem, OR 97301":;Apt 2;7 Elm Court;Salem;OR;97301;USA
+ORG:Salem Clinic;Pediatrics
+TITLE:Pediatrician
+RELATED;TYPE=spouse;VALUE=text:Kwame Nwosu
+RELATED;TYPE=child:urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af
+URL;TYPE=work:https://clinic.example.com/nwosu
+NOTE;LANGUAGE=en:Prefers text\, not calls.
+CATEGORIES:Doctors,Family
+UID:urn:uuid:4fbe8971-0bc3-424c-9c26-36c3e1eff6b1
+END:VCARD
+BEGIN:VCARD
+VERSION:4.0
+KIND:group
+FN:Book club
+MEMBER:urn:uuid:4fbe8971-0bc3-424c-9c26-36c3e1eff6b1
+MEMBER:mailto:reader@example.com
+UID:urn:uuid:a1b2c3d4-0000-4000-8000-000000000001
+END:VCARD

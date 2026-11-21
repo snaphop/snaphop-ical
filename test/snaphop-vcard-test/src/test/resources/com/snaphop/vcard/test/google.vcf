@@ -1,0 +1,29 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Jordan Lee
+N:Lee;Jordan;;;
+NICKNAME:Jojo
+EMAIL;TYPE=INTERNET;TYPE=HOME:jordan.lee@example.com
+EMAIL;TYPE=INTERNET;TYPE=WORK:jlee@work.example.com
+TEL;TYPE=CELL:+1 555-010-0301
+item1.TEL:+1 555-010-0302
+item1.X-ABLabel:Grandpa's house
+ADR;TYPE=HOME:;;400 Pine St;Portland;OR;97201;US
+item2.URL:https\://jordan.example.com
+item2.X-ABLabel:PROFILE
+BDAY:--11-21
+item3.X-ABRELATEDNAMES:Sam Lee
+item3.X-ABLabel:_$!<Sibling>!$_
+NOTE:Soccer coach\; brings oranges
+CATEGORIES:myContacts,Family
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Ms. Patel
+N:Patel;;;Ms.;
+TITLE:Second grade teacher
+ORG:Springfield Elementary
+EMAIL;TYPE=INTERNET;TYPE=WORK:patel@school.example.edu
+BDAY:1988-02-29
+CATEGORIES:myContacts
+END:VCARD

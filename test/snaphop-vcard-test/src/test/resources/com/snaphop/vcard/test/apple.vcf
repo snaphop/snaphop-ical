@@ -1,0 +1,69 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iPhone OS 18.1//EN
+N:Rivera;Maya;Lucía;;
+FN:Maya Lucía Rivera
+NICKNAME:Mimi
+ORG:Rivera Bakery;Kitchen;
+TITLE:Head Baker
+item1.EMAIL;type=INTERNET;type=pref:maya@example.com
+item2.EMAIL;type=INTERNET:maya.rivera@example.org
+item2.X-ABLabel:School
+TEL;type=CELL;type=VOICE;type=pref:(555) 010-0101
+item3.TEL:555-010-0102
+item3.X-ABLabel:Grandma's
+TEL;type=HOME;type=VOICE:555 010 0103
+item4.ADR;type=HOME;type=pref:;;12 Orchard Lane\nApt 3;Springfield;OR;97477;United States
+item4.X-ABADR:us
+item5.URL;type=pref:https://bakery.example.com
+item5.X-ABLabel:_$!<HomePage>!$_
+BDAY;X-APPLE-OMIT-YEAR=1604:1604-05-03
+item6.X-ABDATE;type=pref:2011-06-18
+item6.X-ABLabel:_$!<Anniversary>!$_
+item7.X-ABRELATEDNAMES;type=pref:Daniel Rivera
+item7.X-ABLabel:_$!<Spouse>!$_
+item8.X-ABRELATEDNAMES:Sofia
+item8.X-ABLabel:_$!<Child>!$_
+item9.X-ABRELATEDNAMES:Abuela Rosa
+item9.X-ABLabel:Grandma
+NOTE:Allergic to peanuts\, not tree nuts.\nPicks up Tuesdays.
+CATEGORIES:Family,School
+UID:8B1F3C2E-0D4A-4E57-9C61-2F5D7A1B9E01
+PHOTO;ENCODING=b;TYPE=JPEG:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISI
+ jJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZ
+ WltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6Pk
+ JGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxs
+ fIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3
+ +/wABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0
+ NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVpbXF1eX2BhYmNkZWZnaGlqa
+ 2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goa
+ KjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19j
+ Z2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8AAQIDBAUGBwgJCgsMDQ4P
+ EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFR
+ kdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH
+ 1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO
+ 0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq
+ 6+zt7u/w8fLz9PX29/j5+vv8/f7/
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iPhone OS 18.1//EN
+N:;;;;
+FN:Springfield Pediatrics
+ORG:Springfield Pediatrics;
+X-ABShowAs:COMPANY
+TEL;type=WORK;type=VOICE;type=pref:555-010-0200
+item1.TEL:555-010-0201
+item1.X-ABLabel:After hours
+UID:4C6E0B8A-6E2D-4C3B-8F71-0E9A2B3C4D5E
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//AddressBook 14.0//EN
+N:Soccer carpool
+FN:Soccer carpool
+X-ADDRESSBOOKSERVER-KIND:group
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:8B1F3C2E-0D4A-4E57-9C61-2F5D7A1B9E01
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:1A2B3C4D-5E6F-4A7B-8C9D-0E1F2A3B4C5D
+UID:9D8C7B6A-5F4E-4D3C-2B1A-0F9E8D7C6B5A
+END:VCARD

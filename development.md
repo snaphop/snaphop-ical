@@ -32,23 +32,25 @@ Always build with `./mvnw`, not a system installed `mvn`. The wrapper pins the M
 - doclint on every doc comment that exists, private ones included.
 - [Error Prone](https://errorprone.info) default checks.
 - [NullAway](https://github.com/uber/NullAway) in JSpecify mode, for `@NullMarked` packages.
-- `javadoc` on the library module: every public type and member needs a doc comment,
+- `javadoc` on the library modules: every public type and member needs a doc comment,
   with `@param` and `@return`.
 
-The library targets Java 25 (`maven.compiler.release`): the oldest LTS that has Markdown doc
+The libraries target Java 25 (`maven.compiler.release`): the oldest LTS that has Markdown doc
 comments. The build needs JDK 25 or newer. `.sdkmanrc` names the JDK we build with.
 
 ### Modules
 
 | Module | What it is |
 |--------|------------|
-| `snaphop-ical` | The library: module and package `com.snaphop.ical` |
-| `test/snaphop-ical-test` | End to end tests, with ical4j and ICAL.js as oracles |
+| `snaphop-ical` | The iCalendar library: module and package `com.snaphop.ical` |
+| `snaphop-vcard` | The vCard library: module and package `com.snaphop.vcard`. It shares no code with `snaphop-ical`: vCard's lines differ enough (groups, 2.1's bare parameters and quoted-printable) that a shared core would need options for both |
+| `test/snaphop-ical-test` | End to end tests of `snaphop-ical`, with ical4j and ICAL.js as oracles |
+| `test/snaphop-vcard-test` | End to end tests of `snaphop-vcard`, with ez-vcard and ICAL.js as oracles, and its benchmark |
 | `test/corpus` | Test data from other projects, each with its license and `UPSTREAM.md`; not a Maven module |
 
 ## Publishing
 
-The library and its parent pom are published to SnapHop's Maven repository, as
+The libraries and their parent pom are published to SnapHop's Maven repository, as
 [flylite](https://github.com/snaphop/flylite) is; Maven Central may come later. Test modules are
 never installed or published.
 
@@ -84,17 +86,19 @@ are very fast. Slow tests always go in a test module. So does any test that need
 library.
 
 ical4j may be used in test modules as an oracle: read the same text with both libraries and
-compare. It never becomes a dependency of the library module. So may
-[ICAL.js](https://github.com/kewisch/ical.js), which the test module runs on GraalJS from its
-source in `test/corpus/icaljs/lib`, copied from the same commit as the ICAL.js tests there. Where
+compare. It never becomes a dependency of a library module. So may
+[ICAL.js](https://github.com/kewisch/ical.js), which the test modules run on GraalJS from its
+source in `test/corpus/icaljs/lib`, copied from the same commit as the ICAL.js tests there, and
+which reads vCard too; and [ez-vcard](https://github.com/mangstadt/ez-vcard), the vCard tests'
+other oracle. Where
 an oracle works something out differently, the test lists the file or sample with why, and checks
 it still differs, so that a fix on either side is noticed.
 
 Data copied from other projects goes in `test/corpus/<project>`, with its license and an
-`UPSTREAM.md` naming the repository, commit, original paths and any changes. The test module
-reads it from there, by path.
+`UPSTREAM.md` naming the repository, commit, original paths and any changes. The test modules
+read it from there, by path.
 
-Golden strings of error messages are desirable in this library. For error messages, always
+Golden strings of error messages are desirable in these libraries. For error messages, always
 assert the complete message with `assertEquals` and a Java text block (`"""`). Do not use
 `contains` or other partial-message assertions. If a message includes nondeterministic values,
 replace only those values with stable placeholders before comparing the full string.
@@ -118,17 +122,17 @@ Errors are exceptions or results, never log messages:
 
 ### No logging
 
-The library does not log. A calendar parser has no business writing to a log, and a logging
+The libraries do not log. A calendar or contacts parser has no business writing to a log, and a logging
 dependency would be the first runtime dependency. If something ever must be logged, use the
 JDK's `System.Logger`, never SLF4J or any other logging library.
 
 ## Dependencies
 
-The library module has no runtime dependencies. JSpecify (`org.jspecify`) is the one allowed
+The library modules have no runtime dependencies. JSpecify (`org.jspecify`) is the one allowed
 dependency, and only at compile time: `requires static transitive org.jspecify` in
 `module-info.java`, `optional` in the pom.
 
-Integration with any other library never goes into the library module. It goes into a module
+Integration with any other library never goes into a library module. It goes into a module
 of its own.
 
 ## API Design and Code Style
