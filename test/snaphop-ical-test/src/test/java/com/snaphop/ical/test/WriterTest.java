@@ -289,8 +289,13 @@ class WriterTest {
     assertEquals(b.message, e.getMessage());
   }
 
+  /// The JDK's zones. Once the ical4j oracle has run, in the same JVM, it
+  /// has registered zones of its own: a pool with no rules until it reads a
+  /// `VTIMEZONE` (`ical4j-local-8958cda1-0` and on), and those it has read
+  /// (`ical4j~` and a UUID). They are left out, or the test would depend on
+  /// the order tests run in.
   static Stream<String> zones() {
-    return ZoneId.getAvailableZoneIds().stream().sorted();
+    return ZoneId.getAvailableZoneIds().stream().filter(id -> !id.startsWith("ical4j")).sorted();
   }
 
   /// Each JDK zone's `VTIMEZONE`, read under another name so that the
